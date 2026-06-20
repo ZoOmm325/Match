@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import DateTime, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.core.database import Base
 
@@ -25,3 +25,15 @@ class Jd(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
+    skills: Mapped[list["JdSkill"]] = relationship(
+        back_populates="jd",
+        cascade="all, delete-orphan",
+    )
+    match_results: Mapped[list["MatchResult"]] = relationship(
+        back_populates="jd",
+        cascade="all, delete-orphan",
+    )
+
+
+from backend.models.jd_skill import JdSkill  # noqa: E402
+from backend.models.match_result import MatchResult  # noqa: E402
