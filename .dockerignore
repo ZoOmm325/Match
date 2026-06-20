@@ -1,0 +1,17 @@
+.git/
+.agents/
+.deps/
+.pytest_cache/
+**/__pycache__/
+**/*.py[cod]
+
+frontend/node_modules/
+frontend/.next/
+frontend/next-dev.log
+frontend/next-dev.err.log
+
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+
+*.log

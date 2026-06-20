@@ -1,0 +1,461 @@
+{
+  "project": "岗位JD → 大学专业匹配系统",
+  "description": "输入招聘JD → 提取技能 → 匹配大学专业",
+  "spec_file": "project-spec.md",
+  "generated_at": "2026-06-19",
+  "phases": [
+    {
+      "phase": 1,
+      "title": "基础设施搭建",
+      "tasks": [
+        {
+          "id": "1.1",
+          "title": "初始化 FastAPI 项目骨架",
+          "description": "创建 FastAPI 项目目录结构，包含 routers/、services/、models/、schemas/、core/ 模块目录。创建 main.py 入口、config.py 配置管理（支持 .env 加载）、requirements.txt 依赖清单（fastapi、uvicorn、sqlalchemy、asyncpg、pgvector、openai、pydantic、python-dotenv、alembic）。",
+          "inputs": [],
+          "outputs": ["backend/main.py", "backend/core/config.py", "backend/requirements.txt", "backend/routers/__init__.py", "backend/services/__init__.py", "backend/models/__init__.py", "backend/schemas/__init__.py"],
+          "acceptance": "uvicorn main:app --reload 可启动，/docs 可访问 Swagger UI",
+          "tags": ["fastapi", "setup"]
+        },
+        {
+          "id": "1.2",
+          "title": "初始化 Next.js 前端项目骨架",
+          "description": "使用 create-next-app 初始化 Next.js 项目，TypeScript，App Router。创建基础布局组件、页面路由结构（首页 /、匹配结果页 /match、历史记录 /history）。集成 Tailwind CSS。",
+          "inputs": [],
+          "outputs": ["frontend/ 完整目录结构", "frontend/app/layout.tsx", "frontend/app/page.tsx"],
+          "acceptance": "npm run dev 可启动，浏览器访问 localhost:3000 显示首页",
+          "tags": ["nextjs", "setup"]
+        },
+        {
+          "id": "1.3",
+          "title": "配置 Docker 开发环境",
+          "description": "编写 docker-compose.yml，包含 PostgreSQL + pgvector 服务、FastAPI 后端服务、Next.js 前端服务。编写各服务的 Dockerfile。编写 .env.example 环境变量模板。",
+          "inputs": [],
+          "outputs": ["docker-compose.yml", "backend/Dockerfile", "frontend/Dockerfile", ".env.example"],
+          "acceptance": "docker-compose up 三个服务均正常启动",
+          "tags": ["docker", "setup"]
+        },
+        {
+          "id": "1.4",
+          "title": "配置 Alembic 数据库迁移框架",
+          "description": "初始化 Alembic，配置 alembic.ini 和 env.py 指向 PostgreSQL。创建初始迁移脚本：启用 pgvector 扩展。确保 migrate up/down 可正常执行。",
+          "inputs": ["1.1"],
+          "outputs": ["backend/alembic.ini", "backend/migrations/env.py", "backend/migrations/versions/001_enable_pgvector.py"],
+          "acceptance": "alembic upgrade head 成功创建 pgvector 扩展",
+          "tags": ["database", "alembic"]
+        }
+      ]
+    },
+    {
+      "phase": 2,
+      "title": "数据库模型层",
+      "tasks": [
+        {
+          "id": "2.1",
+          "title": "创建 JD（岗位描述）数据模型",
+          "description": "使用 SQLAlchemy 定义 JD 模型：id、raw_text（原始 JD 文本）、title（岗位名称）、company（公司名）、source（来源）、created_at、updated_at。创建对应的 Pydantic schema（JdCreate、JdResponse）。编写 Alembic 迁移脚本。",
+          "inputs": ["1.1", "1.4"],
+          "outputs": ["backend/models/jd.py", "backend/schemas/jd.py", "backend/migrations/versions/002_create_jd_table.py"],
+          "acceptance": "模型可正常 migrate，Pydantic schema 校验通过",
+          "tags": ["database", "model"]
+        },
+        {
+          "id": "2.2",
+          "title": "创建 Skill（技能）数据模型",
+          "description": "定义 Skill 模型：id、name（技能原始名称）、normalized_name（标准化名称）、category（技能分类）、embedding（pgvector 向量字段 1536维）、created_at。创建 Pydantic schema。编写迁移脚本。",
+          "inputs": ["1.4"],
+          "outputs": ["backend/models/skill.py", "backend/schemas/skill.py", "backend/migrations/versions/003_create_skill_table.py"],
+          "acceptance": "pgvector embedding 字段可正常写入和查询",
+          "tags": ["database", "model", "pgvector"]
+        },
+        {
+          "id": "2.3",
+          "title": "创建 Major（大学专业）数据模型",
+          "description": "定义 Major 模型：id、name（专业名称）、code（专业代码）、category（学科门类）、description（专业描述）、curriculum（课程体系 JSON）、embedding（pgvector 向量字段）、created_at。创建 Pydantic schema。编写迁移脚本。",
+          "inputs": ["1.4"],
+          "outputs": ["backend/models/major.py", "backend/schemas/major.py", "backend/migrations/versions/004_create_major_table.py"],
+          "acceptance": "Major 模型可正常 CRUD，embedding 字段可用",
+          "tags": ["database", "model", "pgvector"]
+        },
+        {
+          "id": "2.4",
+          "title": "创建 JdSkill（JD-技能关联）数据模型",
+          "description": "定义 JdSkill 关联模型：id、jd_id（外键）、skill_id（外键）、relevance_score（相关性得分 0-1）、extraction_method（抽取方式：llm/manual）。创建 Pydantic schema。编写迁移脚本。",
+          "inputs": ["2.1", "2.2"],
+          "outputs": ["backend/models/jd_skill.py", "backend/schemas/jd_skill.py", "backend/migrations/versions/005_create_jd_skill_table.py"],
+          "acceptance": "关联表可正常 JOIN 查询",
+          "tags": ["database", "model", "association"]
+        },
+        {
+          "id": "2.5",
+          "title": "创建 MatchResult（匹配结果）数据模型",
+          "description": "定义 MatchResult 模型：id、jd_id（外键）、major_id（外键）、similarity_score（向量相似度）、final_score（综合得分）、rank（排名）、match_details（匹配详情 JSON：匹配的技能、缺失的技能）。创建 Pydantic schema。编写迁移脚本。",
+          "inputs": ["2.1", "2.3"],
+          "outputs": ["backend/models/match_result.py", "backend/schemas/match_result.py", "backend/migrations/versions/006_create_match_result_table.py"],
+          "acceptance": "匹配结果可正常存储和查询",
+          "tags": ["database", "model"]
+        }
+      ]
+    },
+    {
+      "phase": 3,
+      "title": "OpenAI 集成层",
+      "tasks": [
+        {
+          "id": "3.1",
+          "title": "封装 OpenAI 客户端",
+          "description": "创建 core/openai_client.py，使用 openai 官方 SDK 封装异步客户端。支持 API Key 配置、模型选择（gpt-4o / gpt-4o-mini）、超时重试、速率限制（tenacity 库）。从 config 读取配置。",
+          "inputs": ["1.1"],
+          "outputs": ["backend/core/openai_client.py"],
+          "acceptance": "客户端可成功调用 OpenAI API 并获得响应",
+          "tags": ["openai", "core"]
+        },
+        {
+          "id": "3.2",
+          "title": "实现 Embedding 服务",
+          "description": "创建 services/embedding_service.py。封装 text-embedding-3-small 模型调用：单文本嵌入 text → vector、批量文本嵌入 texts → vectors、缓存嵌入结果避免重复调用。返回 List[float] 1536维向量。",
+          "inputs": ["3.1"],
+          "outputs": ["backend/services/embedding_service.py"],
+          "acceptance": "单文本和批量嵌入均返回正确的 1536 维向量",
+          "tags": ["openai", "embedding"]
+        },
+        {
+          "id": "3.3",
+          "title": "实现 JD 技能抽取 Prompt 模板",
+          "description": "创建 services/prompts/jd_extraction.py。设计 structured output prompt：从 JD 文本中抽取技能列表，输出 JSON 格式 {skills: [{name, category, proficiency_required}]}。包含 few-shot examples（中文 JD 示例）。",
+          "inputs": [],
+          "outputs": ["backend/services/prompts/__init__.py", "backend/services/prompts/jd_extraction.py"],
+          "acceptance": "Prompt 在测试 JD 上能稳定输出结构化 JSON",
+          "tags": ["openai", "prompt-engineering"]
+        }
+      ]
+    },
+    {
+      "phase": 4,
+      "title": "核心业务服务层",
+      "tasks": [
+        {
+          "id": "4.1",
+          "title": "实现 JD 技能抽取服务",
+          "description": "创建 services/jd_service.py。核心方法：extract_skills(jd_text) → 调用 OpenAI 结构化输出抽取技能 → 对每个技能生成 embedding → 保存技能到 Skill 表 → 创建 JdSkill 关联。支持已处理 JD 的幂等检查。",
+          "inputs": ["2.1", "2.2", "2.4", "3.1", "3.2", "3.3"],
+          "outputs": ["backend/services/jd_service.py"],
+          "acceptance": "输入 JD 文本 → 输出结构化的技能列表及 embedding",
+          "tags": ["service", "skill-extraction"]
+        },
+        {
+          "id": "4.2",
+          "title": "实现技能标准化服务",
+          "description": "创建 services/skill_normalizer.py。核心逻辑：对抽取的原始技能名称做标准化（去重、同义词映射、层级归类）。使用技能词表 + LLM 辅助标准化。维护一个技能同义词映射表。",
+          "inputs": ["2.2", "3.1"],
+          "outputs": ["backend/services/skill_normalizer.py"],
+          "acceptance": "\"Python编程\"、\"Python开发\"、\"Python\" 均标准化为 \"Python\"",
+          "tags": ["service", "normalization"]
+        },
+        {
+          "id": "4.3",
+          "title": "创建专业知识库种子数据脚本",
+          "description": "创建 scripts/seed_majors.py。预置中国大学专业数据（≥50条），包含专业名称、代码、学科门类、专业描述、典型课程。对每个专业描述生成 embedding 并存入 Major 表。数据来源：教育部本科专业目录。",
+          "inputs": ["2.3", "3.2"],
+          "outputs": ["backend/scripts/seed_majors.py", "backend/scripts/data/majors.json"],
+          "acceptance": "执行脚本后 Major 表有 ≥50 条带 embedding 的专业数据",
+          "tags": ["data", "seed"]
+        },
+        {
+          "id": "4.4",
+          "title": "创建技能种子数据脚本",
+          "description": "创建 scripts/seed_skills.py。预置常见 IT/工程/商科技能数据（≥100条），包含技能名称、标准化名称、分类。对每个技能生成 embedding 并存入 Skill 表。涵盖：编程语言、框架、工具、软技能、领域知识。",
+          "inputs": ["2.2", "3.2"],
+          "outputs": ["backend/scripts/seed_skills.py", "backend/scripts/data/skills.json"],
+          "acceptance": "执行脚本后 Skill 表有 ≥100 条带 embedding 的技能数据",
+          "tags": ["data", "seed"]
+        }
+      ]
+    },
+    {
+      "phase": 5,
+      "title": "向量匹配引擎",
+      "tasks": [
+        {
+          "id": "5.1",
+          "title": "实现向量相似度查询服务",
+          "description": "创建 services/vector_service.py。核心方法：search_similar(query_embedding, table, top_k) → 使用 pgvector cosine_distance 算子做最近邻搜索。支持在 Skill 表和 Major 表上分别查询。返回带相似度得分的 Top-K 结果。",
+          "inputs": ["2.2", "2.3", "3.2"],
+          "outputs": ["backend/services/vector_service.py"],
+          "acceptance": "给定查询向量 → 返回按相似度排序的 Top-K 结果",
+          "tags": ["service", "pgvector", "matching"]
+        },
+        {
+          "id": "5.2",
+          "title": "实现 JD→技能匹配引擎",
+          "description": "创建 services/matching/skill_matcher.py。逻辑：输入 JD 文本 → 抽取技能+embedding → 在 Skill 知识库中做向量检索 → 返回匹配的技能列表及相似度。使用阈值过滤低相似度匹配。",
+          "inputs": ["4.1", "5.1"],
+          "outputs": ["backend/services/matching/__init__.py", "backend/services/matching/skill_matcher.py"],
+          "acceptance": "JD 文本输入 → 输出 Top-20 匹配技能 + 相似度分数",
+          "tags": ["service", "matching"]
+        },
+        {
+          "id": "5.3",
+          "title": "实现技能→专业匹配引擎",
+          "description": "创建 services/matching/major_matcher.py。逻辑：输入技能列表 → 聚合技能向量→ 在 Major 表的 embedding 上做向量检索 → 计算综合匹配得分（余弦相似度 + 技能覆盖率加权）。返回 Top-N 专业及详细匹配信息。",
+          "inputs": ["4.1", "5.1"],
+          "outputs": ["backend/services/matching/major_matcher.py"],
+          "acceptance": "技能列表输入 → 输出 Top-10 匹配专业 + 综合得分 + 匹配详情",
+          "tags": ["service", "matching"]
+        },
+        {
+          "id": "5.4",
+          "title": "实现端到端匹配流水线",
+          "description": "创建 services/matching/pipeline.py。组装完整匹配流水线：JD文本 → JD抽取技能 → 技能标准化 → 匹配专业知识库 → 生成 MatchResult → 存入数据库。支持同步和异步执行模式。",
+          "inputs": ["5.2", "5.3", "2.5"],
+          "outputs": ["backend/services/matching/pipeline.py"],
+          "acceptance": "输入 JD 文本 → 自动走完流水线 → 数据库存有 MatchResult 记录",
+          "tags": ["service", "pipeline"]
+        }
+      ]
+    },
+    {
+      "phase": 6,
+      "title": "推荐系统",
+      "tasks": [
+        {
+          "id": "6.1",
+          "title": "实现多维度评分算法",
+          "description": "创建 services/recommendation/scorer.py。综合评分维度：(1) 技能向量相似度 权重0.5 (2) 技能覆盖率（JD技能被专业覆盖的比例）权重0.3 (3) 专业就业方向匹配度（LLM评估）权重0.2。每个维度归一化到 0-1。",
+          "inputs": ["5.3"],
+          "outputs": ["backend/services/recommendation/__init__.py", "backend/services/recommendation/scorer.py"],
+          "acceptance": "给定技能列表和专业 → 输出各维度分项得分和加权总分",
+          "tags": ["service", "recommendation"]
+        },
+        {
+          "id": "6.2",
+          "title": "实现推荐排序与解释服务",
+          "description": "创建 services/recommendation/ranker.py。核心逻辑：对候选专业按 final_score 排序 → 生成 Top-5 推荐 → 为每个推荐生成可解释的理由（匹配了哪些技能、缺失哪些技能、推荐语）。使用 LLM 生成自然语言推荐理由。",
+          "inputs": ["6.1", "3.1"],
+          "outputs": ["backend/services/recommendation/ranker.py"],
+          "acceptance": "匹配结果包含自然语言解释的推荐理由",
+          "tags": ["service", "recommendation", "llm"]
+        },
+        {
+          "id": "6.3",
+          "title": "实现冷启动回退策略",
+          "description": "创建 services/recommendation/fallback.py。处理以下场景：(1) JD 抽取技能为空 → 使用 JD 全文 embedding 直接匹配专业 (2) 匹配得分均低于阈值 → 返回通用热门专业推荐 (3) OpenAI API 不可用 → 降级为纯关键词匹配。",
+          "inputs": ["5.4", "3.1"],
+          "outputs": ["backend/services/recommendation/fallback.py"],
+          "acceptance": "各异常场景均有合理的降级推荐结果",
+          "tags": ["service", "fallback", "robustness"]
+        }
+      ]
+    },
+    {
+      "phase": 7,
+      "title": "FastAPI 路由层",
+      "tasks": [
+        {
+          "id": "7.1",
+          "title": "实现 JD 管理 API",
+          "description": "创建 routers/jd.py。端点：POST /api/jd/extract（提交JD文本→抽取技能并存储）、GET /api/jd/{id}（查询JD详情及抽取的技能）、GET /api/jd（列表查询，支持分页）、DELETE /api/jd/{id}（删除JD及关联数据）。所有端点返回标准 JSON 响应格式 {code, data, message}。",
+          "inputs": ["4.1", "2.1"],
+          "outputs": ["backend/routers/jd.py"],
+          "acceptance": "CRUD 端点全部可正常调用，Swagger 文档完整",
+          "tags": ["api", "fastapi", "jd"]
+        },
+        {
+          "id": "7.2",
+          "title": "实现匹配 API",
+          "description": "创建 routers/match.py。端点：POST /api/match（提交JD文本→执行完整匹配流水线→返回推荐专业列表）、POST /api/match/by-skills（直接输入技能列表→返回匹配专业）、GET /api/match/{jd_id}（查询历史匹配结果）。响应包含：推荐专业列表、每个专业的得分明细、匹配技能清单、推荐理由。",
+          "inputs": ["5.4", "6.2", "6.3"],
+          "outputs": ["backend/routers/match.py"],
+          "acceptance": "提交 JD 文本 → 返回结构化推荐结果（专业+得分+理由）",
+          "tags": ["api", "fastapi", "match"]
+        },
+        {
+          "id": "7.3",
+          "title": "实现专业查询 API",
+          "description": "创建 routers/major.py。端点：GET /api/majors（列表查询，支持按学科门类筛选、关键词搜索、分页）、GET /api/majors/{id}（专业详情含课程体系）、GET /api/majors/search（向量语义搜索专业）。",
+          "inputs": ["2.3", "5.1"],
+          "outputs": ["backend/routers/major.py"],
+          "acceptance": "可通过关键词和语义搜索查询专业",
+          "tags": ["api", "fastapi", "major"]
+        },
+        {
+          "id": "7.4",
+          "title": "实现技能查询 API",
+          "description": "创建 routers/skill.py。端点：GET /api/skills（技能列表，支持按分类筛选、搜索）、GET /api/skills/{id}（技能详情）、GET /api/skills/categories（获取所有技能分类）。",
+          "inputs": ["2.2"],
+          "outputs": ["backend/routers/skill.py"],
+          "acceptance": "技能查询端点均可正常返回数据",
+          "tags": ["api", "fastapi", "skill"]
+        },
+        {
+          "id": "7.5",
+          "title": "实现全局中间件与错误处理",
+          "description": "更新 main.py，注册所有路由、添加 CORS 中间件、全局异常处理（HTTPException、ValidationError、通用 Exception）、请求日志中间件、响应时间统计。配置 /api/health 健康检查端点。",
+          "inputs": ["7.1", "7.2", "7.3", "7.4"],
+          "outputs": ["backend/main.py（更新）", "backend/core/middleware.py", "backend/core/exceptions.py"],
+          "acceptance": "异常场景返回统一错误格式，健康检查返回 OK",
+          "tags": ["api", "fastapi", "middleware"]
+        }
+      ]
+    },
+    {
+      "phase": 8,
+      "title": "Next.js 前端页面",
+      "tasks": [
+        {
+          "id": "8.1",
+          "title": "实现 API 客户端层",
+          "description": "创建 frontend/lib/api.ts。封装所有后端 API 调用的 TypeScript 函数：submitJD()、getMatchResult()、searchMajors()、getSkills() 等。统一错误处理、请求/响应类型定义（与后端 Pydantic schema 对齐）。",
+          "inputs": ["7.1", "7.2", "7.3", "7.4"],
+          "outputs": ["frontend/lib/api.ts", "frontend/lib/types.ts"],
+          "acceptance": "所有 API 函数类型安全，可正常调用后端",
+          "tags": ["frontend", "api-client"]
+        },
+        {
+          "id": "8.2",
+          "title": "实现首页 - JD 输入与匹配",
+          "description": "创建首页 page.tsx 及组件。核心交互：JD 文本输入区（支持粘贴和手动输入）→ 点击「开始匹配」→ 调用匹配 API → 展示匹配结果。包含：示例 JD 快速填充、输入校验（非空、长度限制）、加载状态、错误提示。",
+          "inputs": ["8.1"],
+          "outputs": ["frontend/app/page.tsx（更新）", "frontend/components/JdInput.tsx", "frontend/components/MatchButton.tsx"],
+          "acceptance": "输入 JD → 点击匹配 → 看到加载状态 → 展示结果",
+          "tags": ["frontend", "page"]
+        },
+        {
+          "id": "8.3",
+          "title": "实现匹配结果展示组件",
+          "description": "创建 frontend/components/MatchResult.tsx。展示 Top-5 匹配专业卡片列表。每个卡片显示：专业名称、匹配得分（进度条）、匹配技能标签（绿色）、缺失技能标签（灰色）、推荐理由文本。支持展开/收起详细信息。",
+          "inputs": ["8.1"],
+          "outputs": ["frontend/components/MatchResult.tsx", "frontend/components/MajorCard.tsx", "frontend/components/ScoreBar.tsx", "frontend/components/SkillTag.tsx"],
+          "acceptance": "匹配结果以卡片形式美观展示，信息层次清晰",
+          "tags": ["frontend", "component"]
+        },
+        {
+          "id": "8.4",
+          "title": "实现历史记录页面",
+          "description": "创建 frontend/app/history/page.tsx。展示历史匹配记录列表（从后端 GET /api/jd 获取）。每条记录显示：JD 标题、提交时间、匹配的专业数量。点击进入详情页查看完整匹配结果。支持分页加载。",
+          "inputs": ["8.1"],
+          "outputs": ["frontend/app/history/page.tsx", "frontend/components/HistoryList.tsx", "frontend/components/HistoryItem.tsx"],
+          "acceptance": "可浏览历史记录并点击查看详情",
+          "tags": ["frontend", "page"]
+        },
+        {
+          "id": "8.5",
+          "title": "实现专业浏览页面",
+          "description": "创建 frontend/app/majors/page.tsx。展示专业列表，支持按学科门类 Tab 筛选、关键词搜索。每个专业卡片显示：名称、代码、学科门类、简介。点击查看详情（课程设置、培养目标等）。",
+          "inputs": ["8.1"],
+          "outputs": ["frontend/app/majors/page.tsx", "frontend/app/majors/[id]/page.tsx", "frontend/components/MajorList.tsx", "frontend/components/MajorSearch.tsx"],
+          "acceptance": "可浏览、筛选、搜索专业，点击查看详情",
+          "tags": ["frontend", "page"]
+        },
+        {
+          "id": "8.6",
+          "title": "实现全局 UI 组件与样式",
+          "description": "创建通用 UI 组件库：Loading（加载动画）、EmptyState（空状态占位）、ErrorBoundary（错误边界）、Toast（消息提示）、Pagination（分页）。完善全局布局（Header导航、Footer）。响应式适配（移动端友好）。",
+          "inputs": ["8.2"],
+          "outputs": ["frontend/components/ui/Loading.tsx", "frontend/components/ui/EmptyState.tsx", "frontend/components/ui/ErrorBoundary.tsx", "frontend/components/ui/Toast.tsx", "frontend/app/layout.tsx（更新）"],
+          "acceptance": "各页面 UI 一致，移动端布局正常",
+          "tags": ["frontend", "ui"]
+        }
+      ]
+    },
+    {
+      "phase": 9,
+      "title": "测试",
+      "tasks": [
+        {
+          "id": "9.1",
+          "title": "编写数据库模型单元测试",
+          "description": "创建 tests/test_models.py。使用 pytest + pytest-asyncio。测试内容：各模型字段验证、关联关系（外键 JOIN）、embedding 向量读写、CRUD 操作正确性。使用测试数据库（SQLite + 内存模式或 Docker PostgreSQL）。",
+          "inputs": ["2.1", "2.2", "2.3", "2.4", "2.5"],
+          "outputs": ["backend/tests/__init__.py", "backend/tests/conftest.py", "backend/tests/test_models.py"],
+          "acceptance": "pytest tests/test_models.py 全部通过",
+          "tags": ["testing", "models"]
+        },
+        {
+          "id": "9.2",
+          "title": "编写核心服务层单元测试",
+          "description": "创建 tests/test_services/。测试内容：(1) test_jd_service.py - JD技能抽取（mock OpenAI） (2) test_skill_normalizer.py - 技能标准化逻辑 (3) test_vector_service.py - 向量搜索（需真实 pgvector 环境） (4) test_matching_pipeline.py - 匹配流水线端到端。使用 pytest fixtures 管理测试数据。",
+          "inputs": ["4.1", "4.2", "5.1", "5.4"],
+          "outputs": ["backend/tests/test_services/__init__.py", "backend/tests/test_services/test_jd_service.py", "backend/tests/test_services/test_skill_normalizer.py", "backend/tests/test_services/test_vector_service.py", "backend/tests/test_services/test_matching_pipeline.py"],
+          "acceptance": "pytest tests/test_services/ 全部通过",
+          "tags": ["testing", "services"]
+        },
+        {
+          "id": "9.3",
+          "title": "编写 API 集成测试",
+          "description": "创建 tests/test_api.py。使用 httpx.AsyncClient + TestClient 测试所有 API 端点。覆盖正常请求、异常请求（无效参数、不存在的资源）、边界条件。验证响应格式 {code, data, message} 一致性。每个端点至少 3 个测试用例。",
+          "inputs": ["7.1", "7.2", "7.3", "7.4", "7.5"],
+          "outputs": ["backend/tests/test_api.py"],
+          "acceptance": "pytest tests/test_api.py 覆盖率 ≥ 80%",
+          "tags": ["testing", "api", "integration"]
+        },
+        {
+          "id": "9.4",
+          "title": "编写推荐系统单元测试",
+          "description": "创建 tests/test_recommendation.py。测试内容：多维度评分计算正确性、排序逻辑、冷启动回退策略触发条件、LLM 推荐理由生成（mock）。验证各权重配置下的预期行为。",
+          "inputs": ["6.1", "6.2", "6.3"],
+          "outputs": ["backend/tests/test_recommendation.py"],
+          "acceptance": "pytest tests/test_recommendation.py 全部通过",
+          "tags": ["testing", "recommendation"]
+        },
+        {
+          "id": "9.5",
+          "title": "配置 CI 测试流水线",
+          "description": "创建 .github/workflows/test.yml。CI 流程：checkout → setup python → install deps → start pgvector service → run migrations → pytest with coverage → upload coverage report。设置覆盖率最低阈值 80%。",
+          "inputs": ["9.1", "9.2", "9.3", "9.4"],
+          "outputs": [".github/workflows/test.yml"],
+          "acceptance": "GitHub Actions 可正常运行全部测试并产出覆盖率报告",
+          "tags": ["testing", "ci", "devops"]
+        }
+      ]
+    },
+    {
+      "phase": 10,
+      "title": "配置与文档",
+      "tasks": [
+        {
+          "id": "10.1",
+          "title": "编写 README 项目文档",
+          "description": "编写 README.md。内容包含：项目概述、系统架构图（文字描述）、技术栈说明、快速开始指南（环境要求、安装步骤、种子数据导入、启动服务）、API 文档链接（/docs）、项目目录结构说明。中英双语。",
+          "inputs": [],
+          "outputs": ["README.md"],
+          "acceptance": "新开发者按 README 操作能成功启动项目",
+          "tags": ["documentation"]
+        },
+        {
+          "id": "10.2",
+          "title": "配置 pre-commit 代码质量检查",
+          "description": "创建 .pre-commit-config.yaml。配置 hooks：black（Python 格式化）、isort（import 排序）、flake8（代码风格检查）、mypy（类型检查）、eslint + prettier（前端）。配置 pyproject.toml 统一工具设置。",
+          "inputs": ["1.1", "1.2"],
+          "outputs": [".pre-commit-config.yaml", "backend/pyproject.toml", "frontend/.eslintrc.json", "frontend/.prettierrc"],
+          "acceptance": "pre-commit run --all-files 全部通过",
+          "tags": ["devops", "quality"]
+        },
+        {
+          "id": "10.3",
+          "title": "编写 Makefile 常用命令",
+          "description": "创建 Makefile。命令：make install（安装依赖）、make dev（启动开发环境）、make test（运行测试）、make lint（代码检查）、make migrate（数据库迁移）、make seed（导入种子数据）、make build（生产构建）、make clean（清理临时文件）。",
+          "inputs": ["1.3", "1.4", "4.3", "4.4"],
+          "outputs": ["Makefile"],
+          "acceptance": "make dev 一键启动开发环境，make test 运行全部测试",
+          "tags": ["devops", "make"]
+        }
+      ]
+    }
+  ],
+  "task_count": 35,
+  "dependency_graph": {
+    "description": "阶段间有强依赖，需按顺序执行。同一阶段内的任务并行度说明如下：",
+    "parallel_opportunities": [
+      "Phase 2: 2.1-2.5 可部分并行（先完成 2.1,2.2,2.3 后并行 2.4,2.5）",
+      "Phase 3: 3.2 和 3.3 可在 3.1 完成后并行",
+      "Phase 4: 4.1 依赖 4.3/4.4 的种子数据，4.3 和 4.4 可并行",
+      "Phase 5: 5.2 和 5.3 可在 5.1 完成后并行",
+      "Phase 6: 6.1, 6.2, 6.3 为顺序依赖",
+      "Phase 7: 7.1-7.4 可在对应服务完成后并行开发",
+      "Phase 8: 8.2-8.5 可在 8.1 完成后并行",
+      "Phase 9: 9.1-9.4 可在对应模块完成后并行编写",
+      "Phase 10: 10.1-10.3 可并行"
+    ]
+  }
+}
