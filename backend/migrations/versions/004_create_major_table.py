@@ -26,7 +26,7 @@ def upgrade() -> None:
         sa.Column("category", sa.String(length=100), nullable=True),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("curriculum", sa.JSON(), nullable=True),
-        sa.Column("embedding", Vector(1536), nullable=True),
+        sa.Column("embedding", Vector(1024), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

@@ -62,7 +62,7 @@
         {
           "id": "2.2",
           "title": "创建 Skill（技能）数据模型",
-          "description": "定义 Skill 模型：id、name（技能原始名称）、normalized_name（标准化名称）、category（技能分类）、embedding（pgvector 向量字段 1536维）、created_at。创建 Pydantic schema。编写迁移脚本。",
+          "description": "定义 Skill 模型：id、name（技能原始名称）、normalized_name（标准化名称）、category（技能分类）、embedding（pgvector 向量字段 1024维）、created_at。创建 Pydantic schema。编写迁移脚本。",
           "inputs": ["1.4"],
           "outputs": ["backend/models/skill.py", "backend/schemas/skill.py", "backend/migrations/versions/003_create_skill_table.py"],
           "acceptance": "pgvector embedding 字段可正常写入和查询",
@@ -99,25 +99,25 @@
     },
     {
       "phase": 3,
-      "title": "OpenAI 集成层",
+      "title": "DeepSeek 集成层",
       "tasks": [
         {
           "id": "3.1",
-          "title": "封装 OpenAI 客户端",
-          "description": "创建 core/openai_client.py，使用 openai 官方 SDK 封装异步客户端。支持 API Key 配置、模型选择（gpt-4o / gpt-4o-mini）、超时重试、速率限制（tenacity 库）。从 config 读取配置。",
+          "title": "封装 DeepSeek 客户端",
+          "description": "创建 core/deepseek_client.py，使用 openai SDK（DeepSeek 兼容 OpenAI SDK 协议）封装异步客户端。支持 DEEPSEEK_API_KEY 鉴权、DEEPSEEK_BASE_URL 自定义端点（默认 https://api.deepseek.com）、模型选择（deepseek-chat / deepseek-reasoner）、超时重试、速率限制（tenacity 库）。从 config 读取配置，用户需在 .env 中设置 DEEPSEEK_API_KEY=sk-xxx。",
           "inputs": ["1.1"],
-          "outputs": ["backend/core/openai_client.py"],
-          "acceptance": "客户端可成功调用 OpenAI API 并获得响应",
-          "tags": ["openai", "core"]
+          "outputs": ["backend/core/deepseek_client.py"],
+          "acceptance": "客户端可成功调用 DeepSeek API 并获得响应",
+          "tags": ["deepseek", "core"]
         },
         {
           "id": "3.2",
           "title": "实现 Embedding 服务",
-          "description": "创建 services/embedding_service.py。封装 text-embedding-3-small 模型调用：单文本嵌入 text → vector、批量文本嵌入 texts → vectors、缓存嵌入结果避免重复调用。返回 List[float] 1536维向量。",
+          "description": "创建 services/embedding_service.py。使用 sentence-transformers 库加载本地 BGE 嵌入模型（BAAI/bge-m3，1024维）。单文本嵌入 text → vector、批量文本嵌入 texts → vectors、缓存嵌入结果避免重复调用。返回 List[float] 1024维向量。",
           "inputs": ["3.1"],
           "outputs": ["backend/services/embedding_service.py"],
-          "acceptance": "单文本和批量嵌入均返回正确的 1536 维向量",
-          "tags": ["openai", "embedding"]
+          "acceptance": "单文本和批量嵌入均返回正确的 1024 维向量",
+          "tags": ["deepseek", "embedding"]
         },
         {
           "id": "3.3",
@@ -126,7 +126,7 @@
           "inputs": [],
           "outputs": ["backend/services/prompts/__init__.py", "backend/services/prompts/jd_extraction.py"],
           "acceptance": "Prompt 在测试 JD 上能稳定输出结构化 JSON",
-          "tags": ["openai", "prompt-engineering"]
+          "tags": ["deepseek", "prompt-engineering"]
         }
       ]
     },
@@ -137,7 +137,7 @@
         {
           "id": "4.1",
           "title": "实现 JD 技能抽取服务",
-          "description": "创建 services/jd_service.py。核心方法：extract_skills(jd_text) → 调用 OpenAI 结构化输出抽取技能 → 对每个技能生成 embedding → 保存技能到 Skill 表 → 创建 JdSkill 关联。支持已处理 JD 的幂等检查。",
+          "description": "创建 services/jd_service.py。核心方法：extract_skills(jd_text) → 调用 DeepSeek 结构化输出抽取技能 → 对每个技能生成 embedding → 保存技能到 Skill 表 → 创建 JdSkill 关联。支持已处理 JD 的幂等检查。",
           "inputs": ["2.1", "2.2", "2.4", "3.1", "3.2", "3.3"],
           "outputs": ["backend/services/jd_service.py"],
           "acceptance": "输入 JD 文本 → 输出结构化的技能列表及 embedding",
@@ -239,7 +239,7 @@
         {
           "id": "6.3",
           "title": "实现冷启动回退策略",
-          "description": "创建 services/recommendation/fallback.py。处理以下场景：(1) JD 抽取技能为空 → 使用 JD 全文 embedding 直接匹配专业 (2) 匹配得分均低于阈值 → 返回通用热门专业推荐 (3) OpenAI API 不可用 → 降级为纯关键词匹配。",
+          "description": "创建 services/recommendation/fallback.py。处理以下场景：(1) JD 抽取技能为空 → 使用 JD 全文 embedding 直接匹配专业 (2) 匹配得分均低于阈值 → 返回通用热门专业推荐 (3) DeepSeek API 不可用 → 降级为纯关键词匹配。",
           "inputs": ["5.4", "3.1"],
           "outputs": ["backend/services/recommendation/fallback.py"],
           "acceptance": "各异常场景均有合理的降级推荐结果",
@@ -374,7 +374,7 @@
         {
           "id": "9.2",
           "title": "编写核心服务层单元测试",
-          "description": "创建 tests/test_services/。测试内容：(1) test_jd_service.py - JD技能抽取（mock OpenAI） (2) test_skill_normalizer.py - 技能标准化逻辑 (3) test_vector_service.py - 向量搜索（需真实 pgvector 环境） (4) test_matching_pipeline.py - 匹配流水线端到端。使用 pytest fixtures 管理测试数据。",
+          "description": "创建 tests/test_services/。测试内容：(1) test_jd_service.py - JD技能抽取（mock DeepSeek） (2) test_skill_normalizer.py - 技能标准化逻辑 (3) test_vector_service.py - 向量搜索（需真实 pgvector 环境） (4) test_matching_pipeline.py - 匹配流水线端到端。使用 pytest fixtures 管理测试数据。",
           "inputs": ["4.1", "4.2", "5.1", "5.4"],
           "outputs": ["backend/tests/test_services/__init__.py", "backend/tests/test_services/test_jd_service.py", "backend/tests/test_services/test_skill_normalizer.py", "backend/tests/test_services/test_vector_service.py", "backend/tests/test_services/test_matching_pipeline.py"],
           "acceptance": "pytest tests/test_services/ 全部通过",

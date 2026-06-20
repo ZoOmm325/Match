@@ -18,7 +18,7 @@ class JdSkillExtractor:
     """Deterministic JD skill extractor.
 
     This rule-based implementation keeps the API testable without network
-    access. It is intentionally isolated so an OpenAI-backed extractor can be
+    access. It is intentionally isolated so a DeepSeek-backed extractor can be
     added later behind the same service boundary.
     """
 

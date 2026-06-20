@@ -10,7 +10,7 @@ class MajorBase(BaseModel):
     category: str | None = Field(None, max_length=100, description="Discipline category")
     description: str | None = Field(None, description="Major description")
     curriculum: dict[str, Any] | list[Any] | None = Field(None, description="Curriculum structure")
-    embedding: list[float] | None = Field(None, description="1536-dimensional pgvector embedding")
+    embedding: list[float] | None = Field(None, description="1024-dimensional pgvector embedding")
 
     @field_validator("name")
     @classmethod
@@ -31,8 +31,8 @@ class MajorBase(BaseModel):
     @field_validator("embedding")
     @classmethod
     def validate_embedding_dimension(cls, value: list[float] | None) -> list[float] | None:
-        if value is not None and len(value) != 1536:
-            raise ValueError("embedding must contain exactly 1536 dimensions")
+        if value is not None and len(value) != 1024:
+            raise ValueError("embedding must contain exactly 1024 dimensions")
         return value
 
 

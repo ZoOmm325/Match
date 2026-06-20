@@ -4,24 +4,26 @@ import asyncio
 from collections.abc import Sequence
 from typing import Any
 
-from backend.core.openai_client import OpenAIClient, get_openai_client
+from backend.core.config import get_settings
 
 
-EMBEDDING_DIMENSIONS = 1536
+EMBEDDING_DIMENSIONS = 1024
 
 
 class EmbeddingServiceError(RuntimeError):
-    """Raised when an embedding response is malformed."""
+    """Raised when a local embedding response is malformed."""
 
 
 class EmbeddingService:
     def __init__(
         self,
-        openai_client: OpenAIClient | None = None,
+        model: Any | None = None,
         *,
+        model_name: str | None = None,
         cache_enabled: bool = True,
     ) -> None:
-        self.openai_client = openai_client or get_openai_client()
+        self.model_name = model_name or get_settings().embedding_model
+        self._model = model
         self.cache_enabled = cache_enabled
         self._cache: dict[str, list[float]] = {}
         self._lock = asyncio.Lock()
@@ -44,8 +46,7 @@ class EmbeddingService:
 
         missing_texts = self._unique_missing_texts(normalized_texts, cached_vectors)
         if missing_texts:
-            response = await self.openai_client.create_embedding(missing_texts)
-            fetched_vectors = self._extract_vectors(response, expected_count=len(missing_texts))
+            fetched_vectors = await asyncio.to_thread(self._encode_texts, missing_texts)
 
             async with self._lock:
                 for text, vector in zip(missing_texts, fetched_vectors):
@@ -60,6 +61,32 @@ class EmbeddingService:
 
     def cache_size(self) -> int:
         return len(self._cache)
+
+    @property
+    def model(self) -> Any:
+        if self._model is None:
+            self._model = self._load_model()
+        return self._model
+
+    def _load_model(self) -> Any:
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ModuleNotFoundError as exc:
+            raise EmbeddingServiceError(
+                "sentence-transformers package is not installed; run `pip install -r requirements.txt`"
+            ) from exc
+
+        return SentenceTransformer(self.model_name)
+
+    def _encode_texts(self, texts: Sequence[str]) -> list[list[float]]:
+        encoded = self.model.encode(list(texts))
+        vectors = self._coerce_vectors(encoded, expected_count=len(texts))
+        for vector in vectors:
+            if len(vector) != EMBEDDING_DIMENSIONS:
+                raise EmbeddingServiceError(
+                    f"embedding must contain {EMBEDDING_DIMENSIONS} dimensions"
+                )
+        return vectors
 
     def _normalize_text(self, text: str) -> str:
         normalized = text.strip()
@@ -81,37 +108,31 @@ class EmbeddingService:
             missing.append(text)
         return missing
 
-    def _extract_vectors(self, response: Any, *, expected_count: int) -> list[list[float]]:
-        data = self._get_response_data(response)
-        if len(data) != expected_count:
+    def _coerce_vectors(self, encoded: Any, *, expected_count: int) -> list[list[float]]:
+        if hasattr(encoded, "tolist"):
+            encoded = encoded.tolist()
+
+        if expected_count == 1 and self._is_vector(encoded):
+            encoded = [encoded]
+
+        if not isinstance(encoded, list) or len(encoded) != expected_count:
+            actual_count = len(encoded) if isinstance(encoded, list) else 0
             raise EmbeddingServiceError(
-                f"expected {expected_count} embedding vectors, got {len(data)}"
+                f"expected {expected_count} embedding vectors, got {actual_count}"
             )
 
-        vectors = [self._get_embedding_vector(item) for item in data]
-        for vector in vectors:
-            if len(vector) != EMBEDDING_DIMENSIONS:
-                raise EmbeddingServiceError(
-                    f"embedding must contain {EMBEDDING_DIMENSIONS} dimensions"
-                )
+        vectors: list[list[float]] = []
+        for item in encoded:
+            if hasattr(item, "tolist"):
+                item = item.tolist()
+            if not self._is_vector(item):
+                raise EmbeddingServiceError("embedding item must be a numeric list")
+            vectors.append([float(value) for value in item])
         return vectors
 
-    def _get_response_data(self, response: Any) -> list[Any]:
-        if isinstance(response, dict):
-            data = response.get("data")
-        else:
-            data = getattr(response, "data", None)
-
-        if not isinstance(data, list):
-            raise EmbeddingServiceError("embedding response data must be a list")
-        return data
-
-    def _get_embedding_vector(self, item: Any) -> list[float]:
-        if isinstance(item, dict):
-            vector = item.get("embedding")
-        else:
-            vector = getattr(item, "embedding", None)
-
-        if not isinstance(vector, list):
-            raise EmbeddingServiceError("embedding item must contain an embedding list")
-        return [float(value) for value in vector]
+    def _is_vector(self, value: Any) -> bool:
+        return (
+            isinstance(value, list)
+            and bool(value)
+            and all(isinstance(item, (int, float)) for item in value)
+        )

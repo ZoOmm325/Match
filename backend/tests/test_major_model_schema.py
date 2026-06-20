@@ -22,7 +22,7 @@ def test_major_create_trims_and_validates_input():
         category="  Engineering  ",
         description="  Builds software systems.  ",
         curriculum={"core": ["Programming", "Databases"]},
-        embedding=[0.1] * 1536,
+        embedding=[0.1] * 1024,
     )
 
     assert schema.name == "Software Engineering"
@@ -30,7 +30,7 @@ def test_major_create_trims_and_validates_input():
     assert schema.category == "Engineering"
     assert schema.description == "Builds software systems."
     assert schema.curriculum == {"core": ["Programming", "Databases"]}
-    assert len(schema.embedding or []) == 1536
+    assert len(schema.embedding or []) == 1024
 
 
 def test_major_create_rejects_empty_name():
@@ -39,7 +39,7 @@ def test_major_create_rejects_empty_name():
 
 
 def test_major_create_rejects_wrong_embedding_dimension():
-    with pytest.raises(ValidationError, match="1536"):
+    with pytest.raises(ValidationError, match="1024"):
         MajorCreate(name="Software Engineering", embedding=[0.1, 0.2])
 
 
@@ -51,7 +51,7 @@ def test_major_response_supports_from_attributes():
         category = "Engineering"
         description = "Builds software systems."
         curriculum = {"core": ["Programming", "Databases"]}
-        embedding = [0.1] * 1536
+        embedding = [0.1] * 1024
         created_at = datetime(2026, 6, 20, tzinfo=timezone.utc)
 
     schema = MajorResponse.model_validate(MajorOrm())
@@ -74,7 +74,7 @@ def test_major_model_declares_json_and_pgvector_fields():
         "description: Mapped[str | None]",
         "curriculum: Mapped[dict[str, Any] | list[Any] | None]",
         "embedding: Mapped[list[float] | None]",
-        "Vector(1536)",
+        "Vector(1024)",
     ):
         assert expected in model
 
@@ -86,7 +86,7 @@ def test_major_migration_creates_and_drops_majors_table():
     assert 'down_revision: Union[str, None] = "003_create_skill_table"' in migration
     assert 'op.create_table(\n        "majors",' in migration
     assert 'sa.Column("curriculum", sa.JSON(), nullable=True)' in migration
-    assert 'sa.Column("embedding", Vector(1536), nullable=True)' in migration
+    assert 'sa.Column("embedding", Vector(1024), nullable=True)' in migration
     assert 'op.drop_table("majors")' in migration
 
 

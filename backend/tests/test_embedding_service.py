@@ -1,5 +1,4 @@
 import asyncio
-from types import SimpleNamespace
 
 import pytest
 
@@ -7,109 +6,103 @@ from backend.services import EmbeddingService
 from backend.services.embedding_service import EMBEDDING_DIMENSIONS, EmbeddingServiceError
 
 
-class FakeOpenAIClient:
+class FakeLocalEmbeddingModel:
     def __init__(self) -> None:
         self.calls: list[list[str]] = []
 
-    async def create_embedding(self, text):
-        inputs = list(text) if isinstance(text, list) else [text]
+    def encode(self, texts):
+        inputs = list(texts)
         self.calls.append(inputs)
-        return {
-            "data": [
-                {"embedding": [float(index)] * EMBEDDING_DIMENSIONS}
-                for index, _ in enumerate(inputs)
-            ]
-        }
+        return [
+            [float(index)] * EMBEDDING_DIMENSIONS
+            for index, _ in enumerate(inputs)
+        ]
 
 
-def test_embed_text_returns_1536_dimension_vector():
-    fake_client = FakeOpenAIClient()
-    service = EmbeddingService(openai_client=fake_client)
+def test_embed_text_returns_1024_dimension_vector():
+    fake_model = FakeLocalEmbeddingModel()
+    service = EmbeddingService(model=fake_model)
 
     vector = asyncio.run(service.embed_text(" Python FastAPI "))
 
     assert len(vector) == EMBEDDING_DIMENSIONS
-    assert fake_client.calls == [["Python FastAPI"]]
+    assert EMBEDDING_DIMENSIONS == 1024
+    assert fake_model.calls == [["Python FastAPI"]]
     assert service.cache_size() == 1
 
 
 def test_embed_texts_batches_missing_inputs_and_preserves_order():
-    fake_client = FakeOpenAIClient()
-    service = EmbeddingService(openai_client=fake_client)
+    fake_model = FakeLocalEmbeddingModel()
+    service = EmbeddingService(model=fake_model)
 
     vectors = asyncio.run(service.embed_texts(["Python", "FastAPI", "Python"]))
 
     assert len(vectors) == 3
     assert vectors[0] == vectors[2]
-    assert fake_client.calls == [["Python", "FastAPI"]]
+    assert fake_model.calls == [["Python", "FastAPI"]]
     assert service.cache_size() == 2
 
 
 def test_embed_texts_uses_cache_to_avoid_repeated_calls():
-    fake_client = FakeOpenAIClient()
-    service = EmbeddingService(openai_client=fake_client)
+    fake_model = FakeLocalEmbeddingModel()
+    service = EmbeddingService(model=fake_model)
 
     first = asyncio.run(service.embed_text("Python"))
     second = asyncio.run(service.embed_text(" Python "))
 
     assert first == second
-    assert fake_client.calls == [["Python"]]
+    assert fake_model.calls == [["Python"]]
     assert service.cache_size() == 1
 
 
 def test_embed_texts_can_disable_cache():
-    fake_client = FakeOpenAIClient()
-    service = EmbeddingService(openai_client=fake_client, cache_enabled=False)
+    fake_model = FakeLocalEmbeddingModel()
+    service = EmbeddingService(model=fake_model, cache_enabled=False)
 
     asyncio.run(service.embed_text("Python"))
     asyncio.run(service.embed_text("Python"))
 
-    assert fake_client.calls == [["Python"], ["Python"]]
+    assert fake_model.calls == [["Python"], ["Python"]]
     assert service.cache_size() == 0
 
 
 def test_embed_text_rejects_empty_text():
-    service = EmbeddingService(openai_client=FakeOpenAIClient())
+    service = EmbeddingService(model=FakeLocalEmbeddingModel())
 
     with pytest.raises(ValueError, match="text cannot be empty"):
         asyncio.run(service.embed_text("   "))
 
 
-def test_embed_texts_accepts_sdk_object_response():
-    class ObjectResponseClient:
-        async def create_embedding(self, text):
-            return SimpleNamespace(
-                data=[
-                    SimpleNamespace(embedding=[0.25] * EMBEDDING_DIMENSIONS)
-                    for _ in text
-                ]
-            )
+def test_embed_texts_accepts_single_vector_from_model():
+    class SingleVectorModel:
+        def encode(self, texts):
+            return [0.25] * EMBEDDING_DIMENSIONS
 
-    service = EmbeddingService(openai_client=ObjectResponseClient())
+    service = EmbeddingService(model=SingleVectorModel())
 
-    vectors = asyncio.run(service.embed_texts(["Python", "FastAPI"]))
+    vectors = asyncio.run(service.embed_texts(["Python"]))
 
-    assert len(vectors) == 2
+    assert len(vectors) == 1
     assert vectors[0][0] == 0.25
 
 
 def test_embed_texts_rejects_wrong_vector_dimension():
-    class BadDimensionClient:
-        async def create_embedding(self, text):
-            return {"data": [{"embedding": [0.1, 0.2]}]}
+    class BadDimensionModel:
+        def encode(self, texts):
+            return [[0.1, 0.2]]
 
-    service = EmbeddingService(openai_client=BadDimensionClient())
+    service = EmbeddingService(model=BadDimensionModel())
 
-    with pytest.raises(EmbeddingServiceError, match="1536"):
+    with pytest.raises(EmbeddingServiceError, match="1024"):
         asyncio.run(service.embed_text("Python"))
 
 
 def test_embed_texts_rejects_mismatched_response_count():
-    class MissingVectorClient:
-        async def create_embedding(self, text):
-            return {"data": []}
+    class MissingVectorModel:
+        def encode(self, texts):
+            return []
 
-    service = EmbeddingService(openai_client=MissingVectorClient())
+    service = EmbeddingService(model=MissingVectorModel())
 
     with pytest.raises(EmbeddingServiceError, match="expected 1"):
         asyncio.run(service.embed_text("Python"))

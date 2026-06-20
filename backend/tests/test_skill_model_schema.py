@@ -20,13 +20,13 @@ def test_skill_create_trims_and_validates_input():
         name="  Python Programming  ",
         normalized_name="  Python  ",
         category="  programming_language  ",
-        embedding=[0.1] * 1536,
+        embedding=[0.1] * 1024,
     )
 
     assert schema.name == "Python Programming"
     assert schema.normalized_name == "Python"
     assert schema.category == "programming_language"
-    assert len(schema.embedding or []) == 1536
+    assert len(schema.embedding or []) == 1024
 
 
 def test_skill_create_rejects_empty_required_text():
@@ -35,7 +35,7 @@ def test_skill_create_rejects_empty_required_text():
 
 
 def test_skill_create_rejects_wrong_embedding_dimension():
-    with pytest.raises(ValidationError, match="1536"):
+    with pytest.raises(ValidationError, match="1024"):
         SkillCreate(name="Python", normalized_name="Python", embedding=[0.1, 0.2])
 
 
@@ -45,7 +45,7 @@ def test_skill_response_supports_from_attributes():
         name = "Python Programming"
         normalized_name = "Python"
         category = "programming_language"
-        embedding = [0.1] * 1536
+        embedding = [0.1] * 1024
         created_at = datetime(2026, 6, 20, tzinfo=timezone.utc)
 
     schema = SkillResponse.model_validate(SkillOrm())
@@ -65,7 +65,7 @@ def test_skill_model_declares_pgvector_embedding():
         "normalized_name: Mapped[str]",
         "category: Mapped[str | None]",
         "embedding: Mapped[list[float] | None]",
-        "Vector(1536)",
+        "Vector(1024)",
         "created_at: Mapped[datetime]",
     ):
         assert expected in model
@@ -77,7 +77,7 @@ def test_skill_migration_creates_and_drops_skills_table():
     assert 'revision: str = "003_create_skill_table"' in migration
     assert 'down_revision: Union[str, None] = "002_create_jd_table"' in migration
     assert 'op.create_table(\n        "skills",' in migration
-    assert 'sa.Column("embedding", Vector(1536), nullable=True)' in migration
+    assert 'sa.Column("embedding", Vector(1024), nullable=True)' in migration
     assert 'op.drop_table("skills")' in migration
 
 

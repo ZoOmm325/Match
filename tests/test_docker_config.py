@@ -27,7 +27,11 @@ def test_compose_wires_backend_to_pgvector_database():
     assert "path: .env" in compose
     assert "required: false" in compose
     assert "DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@db:5432/match}" in compose
-    assert "OPENAI_API_KEY:" not in compose
+    assert ("OPEN" + "AI_") not in compose
+    assert "DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY?Set DEEPSEEK_API_KEY in .env for DeepSeek-backed services}" in compose
+    assert "DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}" in compose
+    assert "DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}" in compose
+    assert "EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-m3}" in compose
     assert "condition: service_healthy" in compose
     assert "pg_isready" in compose
     assert "uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload" in compose
@@ -56,7 +60,10 @@ def test_env_example_contains_required_runtime_settings():
         "POSTGRES_DB=match",
         "DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/match",
         "RUN_MIGRATIONS=true",
-        "# OPENAI_API_KEY=sk-your-api-key",
+        "# DEEPSEEK_API_KEY=sk-your-deepseek-api-key",
+        "DEEPSEEK_BASE_URL=https://api.deepseek.com",
+        "DEEPSEEK_MODEL=deepseek-chat",
+        "EMBEDDING_MODEL=BAAI/bge-m3",
         "NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api",
     ):
         assert key in env_example

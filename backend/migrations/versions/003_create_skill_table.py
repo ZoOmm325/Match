@@ -24,7 +24,7 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("normalized_name", sa.String(length=255), nullable=False),
         sa.Column("category", sa.String(length=100), nullable=True),
-        sa.Column("embedding", Vector(1536), nullable=True),
+        sa.Column("embedding", Vector(1024), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

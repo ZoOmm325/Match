@@ -28,8 +28,10 @@ def test_settings_can_load_from_env_file(tmp_path: Path):
                 "APP_NAME=Env Loaded Match API",
                 "API_PREFIX=/v1",
                 "DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/testdb",
-                "OPENAI_MODEL=gpt-4o",
-                "EMBEDDING_MODEL=text-embedding-3-small",
+                "DEEPSEEK_API_KEY=sk-test",
+                "DEEPSEEK_MODEL=deepseek-chat",
+                "DEEPSEEK_BASE_URL=https://api.deepseek.com",
+                "EMBEDDING_MODEL=BAAI/bge-m3",
             ]
         ),
         encoding="utf-8",
@@ -40,12 +42,14 @@ def test_settings_can_load_from_env_file(tmp_path: Path):
     assert settings.app_name == "Env Loaded Match API"
     assert settings.api_prefix == "/v1"
     assert settings.database_url.endswith("/testdb")
-    assert settings.openai_model == "gpt-4o"
+    assert settings.deepseek_api_key == "sk-test"
+    assert settings.deepseek_model == "deepseek-chat"
+    assert settings.deepseek_base_url == "https://api.deepseek.com"
 
 
-def test_settings_reject_empty_openai_api_key(tmp_path: Path):
+def test_settings_reject_empty_deepseek_api_key(tmp_path: Path):
     env_file = tmp_path / ".env"
-    env_file.write_text("OPENAI_API_KEY=   \n", encoding="utf-8")
+    env_file.write_text("DEEPSEEK_API_KEY=   \n", encoding="utf-8")
 
-    with pytest.raises(ValidationError, match="OPENAI_API_KEY cannot be empty"):
+    with pytest.raises(ValidationError, match="DEEPSEEK_API_KEY cannot be empty"):
         Settings(_env_file=env_file)

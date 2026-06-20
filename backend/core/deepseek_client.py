@@ -10,14 +10,14 @@ from backend.core.config import Settings, get_settings
 
 
 Message = dict[str, Any]
-_client: OpenAIClient | None = None
+_client: DeepSeekClient | None = None
 
 
-class OpenAIClientConfigurationError(RuntimeError):
-    """Raised when the OpenAI client cannot be configured."""
+class DeepSeekClientConfigurationError(RuntimeError):
+    """Raised when the DeepSeek client cannot be configured."""
 
 
-def _get_retryable_openai_errors() -> tuple[type[BaseException], ...]:
+def _get_retryable_deepseek_errors() -> tuple[type[BaseException], ...]:
     try:
         from openai import APIConnectionError, APITimeoutError, InternalServerError
         from openai import RateLimitError
@@ -28,7 +28,7 @@ def _get_retryable_openai_errors() -> tuple[type[BaseException], ...]:
 
 
 class AsyncRateLimiter:
-    """Small in-process rolling-window limiter for OpenAI API calls."""
+    """Small in-process rolling-window limiter for DeepSeek API calls."""
 
     def __init__(self, max_calls: int, window_seconds: float = 60.0) -> None:
         if max_calls < 1:
@@ -54,8 +54,8 @@ class AsyncRateLimiter:
             await asyncio.sleep(max(sleep_for, 0.0))
 
 
-class OpenAIClient:
-    """Async OpenAI SDK wrapper with config, retry, timeout, and rate limiting."""
+class DeepSeekClient:
+    """Async DeepSeek SDK wrapper with config, retry, timeout, and rate limiting."""
 
     def __init__(
         self,
@@ -64,27 +64,27 @@ class OpenAIClient:
         rate_limiter: AsyncRateLimiter | None = None,
     ) -> None:
         self.settings = settings or get_settings()
-        self.model = self.settings.openai_model
-        self.embedding_model = self.settings.embedding_model
+        self.model = self.settings.deepseek_model
         self._client = client or self._build_sdk_client()
         self._rate_limiter = rate_limiter or AsyncRateLimiter(
-            self.settings.openai_rate_limit_per_minute
+            self.settings.deepseek_rate_limit_per_minute
         )
 
     def _build_sdk_client(self) -> Any:
-        if not self.settings.openai_api_key:
-            raise OpenAIClientConfigurationError("OPENAI_API_KEY is required")
+        if not self.settings.deepseek_api_key:
+            raise DeepSeekClientConfigurationError("DEEPSEEK_API_KEY is required")
 
         try:
             from openai import AsyncOpenAI
         except ModuleNotFoundError as exc:
-            raise OpenAIClientConfigurationError(
+            raise DeepSeekClientConfigurationError(
                 "openai package is not installed; run `pip install -r requirements.txt`"
             ) from exc
 
         return AsyncOpenAI(
-            api_key=self.settings.openai_api_key,
-            timeout=self.settings.openai_timeout_seconds,
+            api_key=self.settings.deepseek_api_key,
+            base_url=self.settings.deepseek_base_url,
+            timeout=self.settings.deepseek_timeout_seconds,
             max_retries=0,
         )
 
@@ -110,16 +110,6 @@ class OpenAIClient:
             lambda: self._client.chat.completions.create(**payload)
         )
 
-    async def create_embedding(
-        self,
-        text: str | Sequence[str],
-        *,
-        model: str | None = None,
-        **kwargs: Any,
-    ) -> Any:
-        payload = {"model": model or self.embedding_model, "input": text, **kwargs}
-        return await self._request_with_retry(lambda: self._client.embeddings.create(**payload))
-
     async def _request_with_retry(self, request: Callable[[], Awaitable[Any]]) -> Any:
         await self._rate_limiter.acquire()
 
@@ -130,9 +120,9 @@ class OpenAIClient:
             return await request()
 
         retrying = AsyncRetrying(
-            stop=stop_after_attempt(self.settings.openai_max_retries),
+            stop=stop_after_attempt(self.settings.deepseek_max_retries),
             wait=wait_exponential(multiplier=1, min=1, max=10),
-            retry=retry_if_exception_type(_get_retryable_openai_errors()),
+            retry=retry_if_exception_type(_get_retryable_deepseek_errors()),
             reraise=True,
         )
 
@@ -141,8 +131,8 @@ class OpenAIClient:
                 return await request()
 
 
-def get_openai_client() -> OpenAIClient:
+def get_deepseek_client() -> DeepSeekClient:
     global _client
     if _client is None:
-        _client = OpenAIClient()
+        _client = DeepSeekClient()
     return _client
