@@ -34,6 +34,8 @@ def test_prompt_schema_requires_structured_skill_output():
     assert JD_EXTRACTION_JSON_SCHEMA["required"] == ["skills"]
     assert skill_schema["required"] == ["name", "category", "proficiency_required"]
     assert "programming_language" in skill_schema["properties"]["category"]["enum"]
+    assert "operating_system" in skill_schema["properties"]["category"]["enum"]
+    assert "architecture" in skill_schema["properties"]["category"]["enum"]
     assert skill_schema["properties"]["proficiency_required"]["enum"] == [
         "basic",
         "intermediate",
@@ -94,6 +96,30 @@ def test_parse_jd_extraction_response_rejects_invalid_category():
 
     with pytest.raises(ValueError, match="unsupported skill category"):
         parse_jd_extraction_response(json.dumps(payload))
+
+
+def test_parse_jd_extraction_response_accepts_extractor_categories():
+    payload = {
+        "skills": [
+            {
+                "name": "Linux",
+                "category": "operating_system",
+                "proficiency_required": "intermediate",
+            },
+            {
+                "name": "Microservices",
+                "category": "architecture",
+                "proficiency_required": "advanced",
+            },
+        ]
+    }
+
+    parsed = parse_jd_extraction_response(json.dumps(payload))
+
+    assert [skill["category"] for skill in parsed["skills"]] == [
+        "operating_system",
+        "architecture",
+    ]
 
 
 def test_parse_jd_extraction_response_rejects_invalid_proficiency():

@@ -44,6 +44,8 @@ JD_EXTRACTION_JSON_SCHEMA: dict[str, Any] = {
                             "cloud",
                             "testing",
                             "tool",
+                            "operating_system",
+                            "architecture",
                             "soft_skill",
                             "domain_knowledge",
                             "other",

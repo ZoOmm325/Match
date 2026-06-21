@@ -67,7 +67,8 @@ def test_major_model_declares_json_and_pgvector_fields():
     for expected in (
         '__tablename__ = "majors"',
         "from pgvector.sqlalchemy import Vector",
-        "from sqlalchemy import DateTime, JSON, String, Text, func",
+        "from sqlalchemy import DateTime, JSON, String, Text, UniqueConstraint, func",
+        'UniqueConstraint("code", name="uq_majors_code")',
         "name: Mapped[str]",
         "code: Mapped[str | None]",
         "category: Mapped[str | None]",
@@ -87,6 +88,7 @@ def test_major_migration_creates_and_drops_majors_table():
     assert 'op.create_table(\n        "majors",' in migration
     assert 'sa.Column("curriculum", sa.JSON(), nullable=True)' in migration
     assert 'sa.Column("embedding", Vector(1024), nullable=True)' in migration
+    assert 'sa.UniqueConstraint("code", name=op.f("uq_majors_code"))' in migration
     assert 'op.drop_table("majors")' in migration
 
 

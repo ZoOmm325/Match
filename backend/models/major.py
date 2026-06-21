@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, JSON, String, Text, func
+from sqlalchemy import DateTime, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.core.database import Base
@@ -10,6 +10,7 @@ from backend.core.database import Base
 
 class Major(Base):
     __tablename__ = "majors"
+    __table_args__ = (UniqueConstraint("code", name="uq_majors_code"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
