@@ -1,4 +1,5 @@
 import asyncio
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -142,6 +143,28 @@ def test_search_rejects_non_numeric_embedding_values():
 def test_search_rejects_boolean_embedding_values():
     service = make_service([])
     embedding = [0.1] * 1023 + [True]
+
+    with pytest.raises(ValueError, match="numeric"):
+        asyncio.run(service.search_similar(embedding))
+
+
+def test_search_accepts_float_compatible_numeric_scalars():
+    class NumpyLikeFloat:
+        def __float__(self):
+            return 0.25
+
+    service = make_service([])
+    embedding = [Decimal("0.1")] * 1023 + [NumpyLikeFloat()]
+
+    asyncio.run(service.search_similar(embedding))
+
+    assert service.session.statements[0]["query_embedding"] == [0.1] * 1023 + [0.25]
+
+
+@pytest.mark.parametrize("invalid_value", ["0.1", float("nan"), float("inf")])
+def test_search_rejects_non_numeric_or_non_finite_values(invalid_value):
+    service = make_service([])
+    embedding = [0.1] * 1023 + [invalid_value]
 
     with pytest.raises(ValueError, match="numeric"):
         asyncio.run(service.search_similar(embedding))

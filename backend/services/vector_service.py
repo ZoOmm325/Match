@@ -68,12 +68,17 @@ class VectorService:
             raise ValueError(
                 f"query_embedding must contain exactly {EMBEDDING_DIMENSIONS} dimensions"
             )
-        converted = [float(value) for value in query_embedding]
-        if not all(
-            isinstance(value, float) and not isinstance(value, bool)
-            for value in converted
-        ):
-            raise ValueError("query_embedding must contain only numeric values")
+        converted: list[float] = []
+        for value in query_embedding:
+            if isinstance(value, (bool, str, bytes)):
+                raise ValueError("query_embedding must contain only numeric values")
+            try:
+                numeric_value = float(value)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ValueError("query_embedding must contain only numeric values") from exc
+            if not math.isfinite(numeric_value):
+                raise ValueError("query_embedding must contain only finite numeric values")
+            converted.append(numeric_value)
         return converted
 
     def _validate_top_k(self, top_k: int) -> int:

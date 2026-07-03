@@ -265,7 +265,7 @@ async def _build_extracted_skills(
                 normalized_name=skill.name,
                 category=skill.category,
                 proficiency_required=skill.proficiency_required,
-                embedding=list(embedding),
+                embedding=[float(v) for v in embedding],
             )
         )
     return results

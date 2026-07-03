@@ -106,7 +106,7 @@ def test_jd_skill_migration_creates_join_table():
 
 
 def test_keyword_rules_migration_updates_existing_constraint():
-    migration = read("backend/migrations/versions/007_allow_keyword_rules_extraction.py")
+    migration = read("backend/migrations/versions/007_keyword_rules.py")
 
     assert 'down_revision: Union[str, None] = "006_create_match_result_table"' in migration
     assert "extraction_method IN ('llm', 'manual', 'keyword_rules')" in migration
