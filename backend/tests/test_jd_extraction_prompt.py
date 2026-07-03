@@ -85,7 +85,7 @@ def test_parse_jd_extraction_response_rejects_invalid_json():
         parse_jd_extraction_response("not-json")
 
 
-def test_parse_jd_extraction_response_rejects_invalid_category():
+def test_parse_jd_extraction_response_accepts_unknown_category():
     payload = {
         "skills": [
             {
@@ -96,8 +96,8 @@ def test_parse_jd_extraction_response_rejects_invalid_category():
         ]
     }
 
-    with pytest.raises(ValueError, match="unsupported skill category"):
-        parse_jd_extraction_response(json.dumps(payload))
+    result = parse_jd_extraction_response(json.dumps(payload))
+    assert result["skills"][0]["category"] == "unknown"
 
 
 def test_parse_jd_extraction_response_accepts_extractor_categories():

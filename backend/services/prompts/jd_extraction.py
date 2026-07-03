@@ -214,13 +214,6 @@ def validate_extracted_skills_payload(payload: Any) -> ExtractedSkillsPayload:
         category = _required_string(item, "category")
         proficiency = _required_string(item, "proficiency_required")
 
-        if (
-            category
-            not in JD_EXTRACTION_JSON_SCHEMA["properties"]["skills"]["items"]["properties"][
-                "category"
-            ]["enum"]
-        ):
-            raise ValueError(f"unsupported skill category: {category}")
         if proficiency not in ("basic", "intermediate", "advanced"):
             raise ValueError(f"unsupported proficiency_required: {proficiency}")
 

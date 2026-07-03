@@ -125,7 +125,7 @@ class SqlAlchemyJdSkillRepository:
                 normalized_name=skill.normalized_name,
                 category=skill.category or "other",
                 proficiency_required=JdService.proficiency_for_score(jd_skill.relevance_score),
-                embedding=list(skill.embedding) if skill.embedding is not None else [],
+                embedding=[float(v) for v in skill.embedding] if skill.embedding is not None else [],
             )
             for skill, jd_skill in rows
         ]
