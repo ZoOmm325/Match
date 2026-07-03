@@ -12,7 +12,6 @@ if __package__ in (None, ""):
 
 from backend.services.embedding_service import EmbeddingService
 
-
 DATA_PATH = Path(__file__).resolve().parent / "data" / "majors.json"
 MIN_MAJOR_COUNT = 50
 

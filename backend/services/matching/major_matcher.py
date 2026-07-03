@@ -9,35 +9,6 @@ from backend.services.matching._utils import aggregate_embedding
 from backend.services.vector_service import VectorSearchResult, VectorService
 
 
-MAJOR_CATEGORY_TO_SKILL_OVERLAP: dict[str, set[str]] = {
-    "工学": {
-        "programming_language",
-        "framework",
-        "database",
-        "devops",
-        "ai",
-        "data",
-        "backend",
-        "frontend",
-        "cloud",
-        "testing",
-        "tool",
-        "operating_system",
-        "architecture",
-        "domain_knowledge",
-    },
-    "管理学": {"soft_skill", "domain_knowledge", "data", "tool"},
-    "经济学": {"data", "domain_knowledge", "soft_skill"},
-    "理学": {"data", "ai", "programming_language", "domain_knowledge"},
-    "医学": {"domain_knowledge", "data", "soft_skill"},
-    "文学": {"soft_skill", "domain_knowledge", "tool"},
-    "法学": {"soft_skill", "domain_knowledge", "data"},
-    "教育学": {"soft_skill", "domain_knowledge", "data"},
-    "艺术学": {"frontend", "tool", "soft_skill", "domain_knowledge"},
-    "农学": {"domain_knowledge", "data", "ai", "tool"},
-}
-
-
 @dataclass(frozen=True)
 class MajorMatchResult:
     major_id: int | None
@@ -82,16 +53,17 @@ class MajorMatcher:
         if self.vector_service is None:
             raise RuntimeError("vector_service is required for major matching")
 
-        query_embedding = self._aggregate_embedding([skill.embedding for skill in normalized_skills])
+        query_embedding = self._aggregate_embedding(
+            [skill.embedding for skill in normalized_skills]
+        )
         candidates = await self.vector_service.search_majors(
             query_embedding,
             top_k=max(limit, limit * multiplier),
         )
-        results = [
-            self._to_major_match(candidate, normalized_skills)
-            for candidate in candidates
+        results = [self._to_major_match(candidate, normalized_skills) for candidate in candidates]
+        return sorted(results, key=lambda item: (-item.final_score, item.major_name.casefold()))[
+            :limit
         ]
-        return sorted(results, key=lambda item: (-item.final_score, item.major_name.casefold()))[:limit]
 
     async def match_jd_to_majors(
         self,
@@ -118,8 +90,7 @@ class MajorMatcher:
         coverage_score = round(len(matched_skills) / len(skills), 4) if skills else 0.0
         similarity_score = candidate.similarity_score
         final_score = round(
-            similarity_score * self.similarity_weight
-            + coverage_score * self.coverage_weight,
+            similarity_score * self.similarity_weight + coverage_score * self.coverage_weight,
             4,
         )
         major_code = getattr(candidate.item, "code", None)
@@ -151,16 +122,10 @@ class MajorMatcher:
         matched: list[str] = []
         missing: list[str] = []
         major_text = self._major_search_text(major)
-        allowed_categories = MAJOR_CATEGORY_TO_SKILL_OVERLAP.get(
-            str(getattr(major, "category", "") or ""),
-            set(),
-        )
         for skill in skills:
             skill_name = skill.normalized_name or skill.name
-            if (
-                skill.category in allowed_categories
-                or self._contains_skill_name(major_text, skill_name)
-                or self._contains_skill_name(major_text, skill.name)
+            if self._contains_skill_name(major_text, skill_name) or self._contains_skill_name(
+                major_text, skill.name
             ):
                 matched.append(skill_name)
             else:
@@ -169,7 +134,7 @@ class MajorMatcher:
 
     def _major_search_text(self, major: Any) -> str:
         parts: list[str] = []
-        for attr in ("name", "category", "description"):
+        for attr in ("name", "category"):
             value = getattr(major, attr, None)
             if value:
                 parts.append(str(value))

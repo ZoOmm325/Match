@@ -4,12 +4,12 @@ Revision ID: 003_create_skill_table
 Revises: 002_create_jd_table
 Create Date: 2026-06-20
 """
+
 from typing import Sequence, Union
 
+import sqlalchemy as sa
 from alembic import op
 from pgvector.sqlalchemy import Vector
-import sqlalchemy as sa
-
 
 revision: str = "003_create_skill_table"
 down_revision: Union[str, None] = "002_create_jd_table"

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.services.jd_service import ExtractedSkillResult, JdService
+from backend.services.jd_service import PROFICIENCY_SCORE_MAP, ExtractedSkillResult, JdService
 
 
 class FakeDeepSeekClient:
@@ -16,11 +16,7 @@ class FakeDeepSeekClient:
         self.calls.append({"messages": messages, "kwargs": kwargs})
         return {
             "choices": [
-                {
-                    "message": {
-                        "content": json.dumps({"skills": self.skills}, ensure_ascii=False)
-                    }
-                }
+                {"message": {"content": json.dumps({"skills": self.skills}, ensure_ascii=False)}}
             ]
         }
 
@@ -275,6 +271,14 @@ def test_jd_service_maps_relevance_score_back_to_proficiency():
     assert JdService.proficiency_for_score(0.8) == "intermediate"
     assert JdService.proficiency_for_score(0.95) == "advanced"
     assert JdService.proficiency_for_score(0.799) == "intermediate"
+
+
+def test_jd_service_uses_shared_proficiency_score_mapping():
+    for proficiency, score in PROFICIENCY_SCORE_MAP.items():
+        assert JdService.score_for_proficiency(proficiency) == score
+        assert JdService.proficiency_for_score(score) == proficiency
+
+    assert JdService.score_for_proficiency("unknown") == PROFICIENCY_SCORE_MAP["intermediate"]
 
 
 def test_service_package_exports_jd_service():

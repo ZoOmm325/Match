@@ -1,0 +1,48 @@
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+extend-exclude = '''
+/(
+    migrations/versions
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["backend"]
+skip_glob = ["backend/migrations/versions/*.py"]
+
+[tool.flake8]
+max-line-length = 100
+extend-ignore = ["E203", "W503"]
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "backend/migrations/versions",
+]
+per-file-ignores = [
+    "backend/main.py:E402",
+    "backend/migrations/env.py:E402",
+    "backend/migrations/versions/*.py:E501",
+    "backend/tests/*.py:F401",
+    "backend/tests/test_services/*.py:F401",
+]
+
+[tool.mypy]
+python_version = "3.12"
+check_untyped_defs = true
+ignore_missing_imports = true
+no_implicit_optional = true
+show_error_codes = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+exclude = [
+    "backend/migrations/",
+    "backend/tests/",
+]
+
+[[tool.mypy.overrides]]
+module = "backend.scripts.*"
+ignore_errors = true

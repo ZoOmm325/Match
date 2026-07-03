@@ -1,4 +1,6 @@
 import asyncio
+from threading import Event
+from time import sleep
 
 import pytest
 
@@ -13,10 +15,7 @@ class FakeLocalEmbeddingModel:
     def encode(self, texts):
         inputs = list(texts)
         self.calls.append(inputs)
-        return [
-            [float(index)] * EMBEDDING_DIMENSIONS
-            for index, _ in enumerate(inputs)
-        ]
+        return [[float(index)] * EMBEDDING_DIMENSIONS for index, _ in enumerate(inputs)]
 
 
 def test_embed_text_returns_1024_dimension_vector():
@@ -64,6 +63,68 @@ def test_embed_texts_can_disable_cache():
 
     assert fake_model.calls == [["Python"], ["Python"]]
     assert service.cache_size() == 0
+
+
+def test_concurrent_requests_share_inflight_embedding_work():
+    class SlowModel(FakeLocalEmbeddingModel):
+        def encode(self, texts):
+            sleep(0.02)
+            return super().encode(texts)
+
+    async def run():
+        model = SlowModel()
+        service = EmbeddingService(model=model)
+        vectors = await asyncio.gather(
+            service.embed_text("Python"),
+            service.embed_text("Python"),
+        )
+        return model, vectors
+
+    model, vectors = asyncio.run(run())
+
+    assert model.calls == [["Python"]]
+    assert vectors[0] == vectors[1]
+
+
+def test_embedding_cache_enforces_size_limit():
+    service = EmbeddingService(model=FakeLocalEmbeddingModel(), cache_max_size=1)
+
+    asyncio.run(service.embed_texts(["Python", "FastAPI"]))
+
+    assert service.cache_size() == 1
+
+
+def test_cache_size_does_not_mutate_expired_entries():
+    service = EmbeddingService(model=FakeLocalEmbeddingModel(), cache_ttl_seconds=1)
+    service._cache["expired"] = (0.0, [0.0] * EMBEDDING_DIMENSIONS)
+
+    assert service.cache_size() == 0
+    assert "expired" in service._cache
+
+
+def test_cancelled_embedding_cleans_inflight_work():
+    started = Event()
+    release = Event()
+
+    class BlockingModel(FakeLocalEmbeddingModel):
+        def encode(self, texts):
+            started.set()
+            release.wait(timeout=2)
+            return super().encode(texts)
+
+    async def run():
+        service = EmbeddingService(model=BlockingModel())
+        task = asyncio.create_task(service.embed_text("Python"))
+        await asyncio.to_thread(started.wait, 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        release.set()
+        return service
+
+    service = asyncio.run(run())
+
+    assert service._inflight == {}
 
 
 def test_embed_text_rejects_empty_text():

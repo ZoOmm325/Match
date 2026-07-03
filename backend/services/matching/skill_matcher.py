@@ -63,9 +63,7 @@ class SkillMatcher:
         if not extraction.skills:
             return []
 
-        aggregated = self._aggregate_embedding(
-            [skill.embedding for skill in extraction.skills]
-        )
+        aggregated = self._aggregate_embedding([skill.embedding for skill in extraction.skills])
         extracted_skill_name = ", ".join(skill.name for skill in extraction.skills)
         return await self._search_and_merge(
             query_embedding=aggregated,
@@ -139,9 +137,7 @@ class SkillMatcher:
         if top_k < 1:
             raise ValueError("top_k must be at least 1")
 
-    async def _search_skills(
-        self, query_embedding: list[float], *, top_k: int
-    ) -> list[Any]:
+    async def _search_skills(self, query_embedding: list[float], *, top_k: int) -> list[Any]:
         if self.vector_service is None:
             raise RuntimeError("vector_service is required for skill matching")
         return await self.vector_service.search_skills(query_embedding, top_k=top_k)

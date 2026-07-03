@@ -4,7 +4,6 @@ from sqlalchemy.orm import DeclarativeBase
 
 from backend.core.config import get_settings
 
-
 NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",
     "uq": "uq_%(table_name)s_%(column_0_name)s",
@@ -19,7 +18,11 @@ class Base(DeclarativeBase):
 
 
 def make_engine(database_url: str | None = None) -> AsyncEngine:
-    return create_async_engine(database_url or get_settings().database_url, future=True)
+    return create_async_engine(
+        database_url or get_settings().database_url,
+        future=True,
+        pool_pre_ping=True,
+    )
 
 
 engine = make_engine()

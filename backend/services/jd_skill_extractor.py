@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from backend.schemas.jd_extraction import SkillExtractionItem
+from backend.services.prompts.jd_extraction import Proficiency
 
 
 @dataclass(frozen=True)
@@ -22,7 +23,7 @@ class JdSkillExtractor:
     added later behind the same service boundary.
     """
 
-    PROFICIENCY_RULES: tuple[tuple[str, str], ...] = (
+    PROFICIENCY_RULES: tuple[tuple[Proficiency, str], ...] = (
         ("advanced", r"(精通|专家|深入理解|深度掌握|架构经验|lead|senior|expert)"),
         ("intermediate", r"(熟悉|熟练|掌握|经验|能够|独立|proficient|familiar)"),
         ("basic", r"(了解|优先|加分|基础|接触过|basic|plus)"),
@@ -64,8 +65,7 @@ class JdSkillExtractor:
     def extract(self, jd_text: str) -> list[SkillExtractionItem]:
         text = jd_text.strip()
         items = [
-            self._build_item(rule, alias, text)
-            for rule, alias in self._iter_matched_rules(text)
+            self._build_item(rule, alias, text) for rule, alias in self._iter_matched_rules(text)
         ]
         return sorted(items, key=lambda item: (-item.confidence, item.name.lower()))
 
@@ -102,13 +102,18 @@ class JdSkillExtractor:
         end = min(len(text), match.end() + 32)
         return text[start:end].strip(" ，。；;、\n\t")
 
-    def _infer_proficiency(self, evidence: str) -> str:
+    def _infer_proficiency(self, evidence: str) -> Proficiency:
         for proficiency, pattern in self.PROFICIENCY_RULES:
             if re.search(pattern, evidence, flags=re.IGNORECASE):
                 return proficiency
         return "intermediate"
 
-    def _score_confidence(self, alias: str, evidence: str, proficiency: str) -> float:
+    def _score_confidence(
+        self,
+        alias: str,
+        evidence: str,
+        proficiency: Proficiency,
+    ) -> float:
         score = 0.72
         if len(alias) >= 3:
             score += 0.08

@@ -4,10 +4,10 @@ Revision ID: 001_enable_pgvector
 Revises:
 Create Date: 2026-06-19
 """
+
 from typing import Sequence, Union
 
 from alembic import op
-
 
 revision: str = "001_enable_pgvector"
 down_revision: Union[str, None] = None

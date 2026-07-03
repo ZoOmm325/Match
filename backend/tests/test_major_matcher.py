@@ -38,7 +38,9 @@ def skill(name, category, embedding):
     )
 
 
-def major_candidate(name, score, *, major_id=1, code="080901", category="工学", description="", curriculum=None):
+def major_candidate(
+    name, score, *, major_id=1, code="080901", category="工学", description="", curriculum=None
+):
     item = SimpleNamespace(
         id=major_id,
         name=name,
@@ -64,11 +66,20 @@ def test_match_skills_to_majors_aggregates_vectors_and_scores_candidates():
     ]
     vector_service = FakeVectorService(
         [
-            major_candidate("软件工程", 0.8, major_id=1, description="Python FastAPI software systems"),
-            major_candidate("会计学", 0.9, major_id=2, category="管理学", description="financial reports"),
+            major_candidate(
+                "软件工程",
+                0.8,
+                major_id=1,
+                curriculum={"core": ["Python", "FastAPI"]},
+            ),
+            major_candidate(
+                "会计学", 0.9, major_id=2, category="管理学", description="financial reports"
+            ),
         ]
     )
-    matcher = MajorMatcher(vector_service=vector_service, similarity_weight=0.7, coverage_weight=0.3)
+    matcher = MajorMatcher(
+        vector_service=vector_service, similarity_weight=0.7, coverage_weight=0.3
+    )
 
     results = asyncio.run(matcher.match_skills_to_majors(skills, top_n=2))
 
@@ -105,7 +116,9 @@ def test_match_skills_to_majors_limits_and_sorts_by_final_score():
             major_candidate("金融学", 0.95, major_id=2, category="经济学"),
         ]
     )
-    matcher = MajorMatcher(vector_service=vector_service, similarity_weight=0.5, coverage_weight=0.5)
+    matcher = MajorMatcher(
+        vector_service=vector_service, similarity_weight=0.5, coverage_weight=0.5
+    )
 
     results = asyncio.run(matcher.match_skills_to_majors(skills, top_n=1, candidate_multiplier=4))
 
@@ -126,7 +139,8 @@ def test_match_jd_to_majors_uses_jd_service_extraction():
 
     assert jd_service.calls == ["Need ML engineer."]
     assert results[0].major_name == "人工智能"
-    assert results[0].matched_skills == ["Machine Learning"]
+    assert results[0].matched_skills == []
+    assert results[0].missing_skills == ["Machine Learning"]
 
 
 def test_match_skills_to_majors_returns_empty_for_empty_skills():
@@ -141,8 +155,8 @@ def test_split_covered_skills_uses_word_boundaries_for_short_skill_names():
         name="Engineering Design",
         code="080000",
         category="other",
-        description="Courses include C++ programming, CAD modeling, and statistics.",
-        curriculum={},
+        description="Courses include C++ programming and statistics.",
+        curriculum={"core": ["CAD modeling"]},
     )
     skills = [
         skill("C", "other", [1.0]),
@@ -155,6 +169,25 @@ def test_split_covered_skills_uses_word_boundaries_for_short_skill_names():
     assert missing == ["C"]
 
 
+def test_split_covered_skills_ignores_incidental_description_mentions():
+    matcher = MajorMatcher(vector_service=FakeVectorService([]))
+    major = SimpleNamespace(
+        name="Business Administration",
+        code="120201",
+        category="management",
+        description="Graduates may collaborate with Python development teams.",
+        curriculum={"core": ["Management", "Accounting"]},
+    )
+
+    matched, missing = matcher._split_covered_skills(
+        major,
+        [skill("Python", "programming_language", [1.0])],
+    )
+
+    assert matched == []
+    assert missing == ["Python"]
+
+
 def test_major_matcher_validates_inputs_and_dependencies():
     matcher = MajorMatcher(vector_service=FakeVectorService([]))
 
@@ -162,7 +195,11 @@ def test_major_matcher_validates_inputs_and_dependencies():
         matcher._aggregate_embedding([[1.0, 2.0], [1.0]])
 
     with pytest.raises(ValueError, match="top_n"):
-        asyncio.run(matcher.match_skills_to_majors([skill("Python", "programming_language", [1.0])], top_n=0))
+        asyncio.run(
+            matcher.match_skills_to_majors(
+                [skill("Python", "programming_language", [1.0])], top_n=0
+            )
+        )
 
     with pytest.raises(ValueError, match="candidate_multiplier"):
         asyncio.run(
@@ -173,7 +210,9 @@ def test_major_matcher_validates_inputs_and_dependencies():
         )
 
     with pytest.raises(RuntimeError, match="vector_service"):
-        asyncio.run(MajorMatcher().match_skills_to_majors([skill("Python", "programming_language", [1.0])]))
+        asyncio.run(
+            MajorMatcher().match_skills_to_majors([skill("Python", "programming_language", [1.0])])
+        )
 
     with pytest.raises(RuntimeError, match="jd_service"):
         asyncio.run(matcher.match_jd_to_majors("Need Python."))

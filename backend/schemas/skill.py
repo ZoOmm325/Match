@@ -5,7 +5,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 class SkillBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="Original skill name")
-    normalized_name: str = Field(..., min_length=1, max_length=255, description="Canonical skill name")
+    normalized_name: str = Field(
+        ..., min_length=1, max_length=255, description="Canonical skill name"
+    )
     category: str | None = Field(None, max_length=100, description="Skill category")
     embedding: list[float] | None = Field(None, description="1024-dimensional pgvector embedding")
 
@@ -42,3 +44,24 @@ class SkillResponse(SkillBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SkillSummaryResponse(BaseModel):
+    id: int
+    name: str
+    normalized_name: str
+    category: str | None = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SkillListResponse(BaseModel):
+    items: list[SkillSummaryResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class SkillCategoriesResponse(BaseModel):
+    categories: list[str]

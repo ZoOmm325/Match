@@ -1,6 +1,6 @@
 from typing import Any
 
-from sqlalchemy import CheckConstraint, Float, ForeignKey, Integer, JSON, UniqueConstraint
+from sqlalchemy import JSON, CheckConstraint, Float, ForeignKey, Integer, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.core.database import Base

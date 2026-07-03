@@ -1,14 +1,18 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from time import sleep
 from types import SimpleNamespace
 
 import pytest
 
 import backend.core.deepseek_client as deepseek_client_module
 from backend.core.config import Settings
-from backend.core.deepseek_client import AsyncRateLimiter, DeepSeekClient
-from backend.core.deepseek_client import DeepSeekClientConfigurationError
-
+from backend.core.deepseek_client import (
+    AsyncRateLimiter,
+    DeepSeekClient,
+    DeepSeekClientConfigurationError,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -85,9 +89,20 @@ def test_deepseek_client_uses_lazy_official_sdk_and_tenacity_imports():
 
     assert "from openai import AsyncOpenAI" in source
     assert "base_url=self.settings.deepseek_base_url" in source
-    assert "from openai import APIConnectionError, APITimeoutError, InternalServerError" in source
-    assert "from openai import RateLimitError" in source
-    assert "from tenacity import AsyncRetrying" in source
+    for error_name in (
+        "APIConnectionError",
+        "APITimeoutError",
+        "InternalServerError",
+        "RateLimitError",
+    ):
+        assert error_name in source
+    for tenacity_name in (
+        "AsyncRetrying",
+        "retry_if_exception_type",
+        "stop_after_attempt",
+        "wait_exponential",
+    ):
+        assert tenacity_name in source
     assert "stop_after_attempt(self.settings.deepseek_max_retries)" in source
     assert "retry_if_exception_type(_get_retryable_deepseek_errors())" in source
     assert "retry_if_exception_type(Exception)" not in source
@@ -111,6 +126,43 @@ def test_get_deepseek_client_reuses_single_instance(monkeypatch):
 
     assert first is second
     assert len(created_clients) == 1
+
+
+def test_get_deepseek_client_is_thread_safe(monkeypatch):
+    created_clients = []
+
+    class SlowFakeClient:
+        def __init__(self):
+            sleep(0.02)
+            created_clients.append(self)
+
+    monkeypatch.setattr(deepseek_client_module, "_client", None)
+    monkeypatch.setattr(deepseek_client_module, "DeepSeekClient", SlowFakeClient)
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        clients = list(
+            executor.map(lambda _: deepseek_client_module.get_deepseek_client(), range(8))
+        )
+
+    assert len(created_clients) == 1
+    assert all(client is clients[0] for client in clients)
+
+
+def test_close_deepseek_client_closes_and_resets_singleton(monkeypatch):
+    class ClosableClient:
+        def __init__(self):
+            self.closed = False
+
+        async def close(self):
+            self.closed = True
+
+    client = ClosableClient()
+    monkeypatch.setattr(deepseek_client_module, "_client", client)
+
+    asyncio.run(deepseek_client_module.close_deepseek_client())
+
+    assert client.closed is True
+    assert deepseek_client_module._client is None
 
 
 def test_settings_expose_deepseek_runtime_controls():

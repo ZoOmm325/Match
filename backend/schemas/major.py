@@ -45,3 +45,32 @@ class MajorResponse(MajorBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class MajorListResponse(BaseModel):
+    items: list[MajorResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class MajorSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=1000)
+    top_k: int = Field(10, ge=1, le=50)
+
+    @field_validator("query")
+    @classmethod
+    def normalize_query(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("query cannot be empty")
+        return normalized
+
+
+class MajorSearchResultResponse(MajorResponse):
+    similarity_score: float = Field(..., ge=0, le=1)
+
+
+class MajorSearchResponse(BaseModel):
+    query: str
+    results: list[MajorSearchResultResponse]

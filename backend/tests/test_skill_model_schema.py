@@ -5,8 +5,13 @@ import pytest
 from pydantic import ValidationError
 
 from backend import schemas
-from backend.schemas.skill import SkillCreate, SkillResponse
-
+from backend.schemas.skill import (
+    SkillCategoriesResponse,
+    SkillCreate,
+    SkillListResponse,
+    SkillResponse,
+    SkillSummaryResponse,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -80,12 +85,21 @@ def test_skill_migration_creates_and_drops_skills_table():
     assert 'down_revision: Union[str, None] = "002_create_jd_table"' in migration
     assert 'op.create_table(\n        "skills",' in migration
     assert 'sa.Column("embedding", Vector(1024), nullable=True)' in migration
-    assert 'sa.UniqueConstraint("normalized_name", name=op.f("uq_skills_normalized_name"))' in migration
+    assert (
+        'sa.UniqueConstraint("normalized_name", name=op.f("uq_skills_normalized_name"))'
+        in migration
+    )
     assert 'op.drop_table("skills")' in migration
 
 
 def test_schema_package_exports_skill_schemas():
+    assert "SkillCategoriesResponse" in schemas.__all__
     assert "SkillCreate" in schemas.__all__
+    assert "SkillListResponse" in schemas.__all__
     assert "SkillResponse" in schemas.__all__
+    assert "SkillSummaryResponse" in schemas.__all__
+    assert schemas.SkillCategoriesResponse is SkillCategoriesResponse
     assert schemas.SkillCreate is SkillCreate
+    assert schemas.SkillListResponse is SkillListResponse
     assert schemas.SkillResponse is SkillResponse
+    assert schemas.SkillSummaryResponse is SkillSummaryResponse

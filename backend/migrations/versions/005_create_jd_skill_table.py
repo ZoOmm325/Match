@@ -4,11 +4,11 @@ Revision ID: 005_create_jd_skill_table
 Revises: 004_create_major_table
 Create Date: 2026-06-20
 """
+
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision: str = "005_create_jd_skill_table"
 down_revision: Union[str, None] = "004_create_major_table"
@@ -29,10 +29,12 @@ def upgrade() -> None:
             name=op.f("ck_jd_skills_relevance_score_range"),
         ),
         sa.CheckConstraint(
-            "extraction_method IN ('llm', 'manual')",
+            "extraction_method IN ('llm', 'manual', 'keyword_rules')",
             name=op.f("ck_jd_skills_extraction_method"),
         ),
-        sa.ForeignKeyConstraint(["jd_id"], ["jds.id"], name=op.f("fk_jd_skills_jd_id_jds"), ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["jd_id"], ["jds.id"], name=op.f("fk_jd_skills_jd_id_jds"), ondelete="CASCADE"
+        ),
         sa.ForeignKeyConstraint(
             ["skill_id"],
             ["skills.id"],

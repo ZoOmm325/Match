@@ -13,7 +13,6 @@ if __package__ in (None, ""):
 
 from backend.services.embedding_service import EmbeddingService
 
-
 DATA_PATH = Path(__file__).resolve().parent / "data" / "skills.json"
 MIN_SKILL_COUNT = 100
 

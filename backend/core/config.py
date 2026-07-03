@@ -27,6 +27,14 @@ class Settings(BaseSettings):
             raise ValueError("DEEPSEEK_API_KEY cannot be empty")
         return value
 
+    @field_validator("cors_origins")
+    @classmethod
+    def validate_cors_origins(cls, value: List[str]) -> List[str]:
+        normalized = [origin.strip() for origin in value if origin.strip()]
+        if not normalized:
+            raise ValueError("CORS_ORIGINS must contain at least one origin")
+        return normalized
+
     @field_validator("deepseek_timeout_seconds")
     @classmethod
     def validate_timeout(cls, value: float) -> float:

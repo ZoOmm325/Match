@@ -1,61 +1,67 @@
 import logging
-from pathlib import Path
 import sys
+from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI, Request
-from fastapi.exceptions import RequestValidationError
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
-# Allow the task acceptance command `cd backend && uvicorn main:app --reload`
-# while keeping package imports stable for tests run from the repository root.
+# Support `cd backend && uvicorn main:app --reload` while preserving package imports.
 PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-from backend.core.config import get_settings
+from backend.core.config import Settings, get_settings
+from backend.core.exceptions import install_exception_handlers
+from backend.core.middleware import RequestLoggingMiddleware
 from backend.routers.jd import router as jd_router
+from backend.routers.major import router as major_router
+from backend.routers.match import router as match_router
+from backend.routers.skill import router as skill_router
 
 
-logger = logging.getLogger(__name__)
-settings = get_settings()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    from backend.core.deepseek_client import close_deepseek_client
 
-app = FastAPI(
-    title=settings.app_name,
-    version="0.1.0",
-    description="Extract structured skills from recruitment JD text.",
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(jd_router, prefix=settings.api_prefix)
+    await close_deepseek_client()
 
 
-@app.get("/api/health", tags=["Health"])
-async def health_check() -> dict[str, object]:
-    return {"code": 0, "data": {"status": "ok"}, "message": "OK"}
-
-
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(
-    request: Request, exc: RequestValidationError
-) -> JSONResponse:
-    return JSONResponse(
-        status_code=422,
-        content={"code": 422, "data": {"errors": exc.errors()}, "message": "Validation failed"},
+def create_app(settings: Settings | None = None) -> FastAPI:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+    logging.getLogger("backend.core.middleware").setLevel(logging.INFO)
+    app_settings = settings or get_settings()
+    app = FastAPI(
+        title=app_settings.app_name,
+        version="0.1.0",
+        description="Extract structured skills from recruitment JD text.",
+        lifespan=lifespan,
     )
 
-
-@app.exception_handler(Exception)
-async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.exception("Unhandled exception")
-    return JSONResponse(
-        status_code=500,
-        content={"code": 500, "data": None, "message": "Internal server error"},
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=app_settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
+    app.add_middleware(RequestLoggingMiddleware)
+    install_exception_handlers(app)
+
+    app.include_router(jd_router, prefix=app_settings.api_prefix)
+    app.include_router(major_router, prefix=app_settings.api_prefix)
+    app.include_router(match_router, prefix=app_settings.api_prefix)
+    app.include_router(skill_router, prefix=app_settings.api_prefix)
+
+    @app.get(f"{app_settings.api_prefix}/health", tags=["Health"])
+    async def health_check() -> dict[str, object]:
+        return {"code": 0, "data": {"status": "ok"}, "message": "OK"}
+
+    return app
+
+
+app = create_app()

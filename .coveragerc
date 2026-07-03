@@ -1,0 +1,13 @@
+[run]
+source = backend
+omit =
+    backend/tests/*
+    backend/migrations/*
+
+[report]
+show_missing = True
+skip_covered = False
+exclude_lines =
+    pragma: no cover
+    if TYPE_CHECKING:
+    raise NotImplementedError

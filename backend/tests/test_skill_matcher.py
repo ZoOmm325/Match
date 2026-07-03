@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.services.jd_service import ExtractedSkillResult, JdExtractionResult
-from backend.services.matching import SkillMatchResult, SkillMatcher
+from backend.services.matching import SkillMatcher, SkillMatchResult
 from backend.services.vector_service import VectorSearchResult
 
 
@@ -129,7 +129,9 @@ def test_match_per_skill_applies_threshold_and_top_k():
     )
 
     results = asyncio.run(
-        matcher.match_per_skill("Need backend API experience.", per_skill_k=5, top_k=1, threshold=0.8)
+        matcher.match_per_skill(
+            "Need backend API experience.", per_skill_k=5, top_k=1, threshold=0.8
+        )
     )
 
     assert [result.matched_seed_skill for result in results] == ["REST API"]
@@ -172,9 +174,7 @@ def test_matcher_rejects_invalid_inputs_and_missing_vector_service():
                 jd_service=FakeJdService(
                     JdExtractionResult(jd_id=None, skills=[extracted_skill("Python")])
                 )
-            ).match(
-                "Need Python."
-            )
+            ).match("Need Python.")
         )
 
 

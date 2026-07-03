@@ -4,12 +4,18 @@
 
 :root {
   color-scheme: light;
-  background: #f8fafc;
   color: #0f172a;
+  background: #f8fafc;
+  --page-header-height: 4.5rem;
 }
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -18,7 +24,34 @@ body {
   background: #f8fafc;
 }
 
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
 a {
   color: inherit;
   text-decoration: none;
+}
+
+::selection {
+  color: #0c4a6e;
+  background: #bae6fd;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

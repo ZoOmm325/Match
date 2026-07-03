@@ -126,6 +126,22 @@ def test_dictionary_prevents_unnecessary_llm_call():
     assert client.calls == []
 
 
+def test_llm_fallback_ignores_invalid_json():
+    class InvalidJsonClient:
+        async def create_chat_completion(self, messages, **kwargs):
+            return {"choices": [{"message": {"content": "not-json"}}]}
+
+    normalizer = SkillNormalizer(
+        deepseek_client=InvalidJsonClient(),
+        use_llm_fallback=True,
+    )
+
+    result = asyncio.run(normalizer.normalize_skill("product analytics", category="data"))
+
+    assert result.normalized_name == "Product Analytics"
+    assert result.source == "fallback"
+
+
 def test_custom_synonyms_extend_dictionary():
     normalizer = SkillNormalizer(synonyms={"prompt设计": ("Prompt Engineering", "ai")})
 

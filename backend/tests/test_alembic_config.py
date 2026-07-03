@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -15,7 +14,10 @@ def test_alembic_ini_points_to_migrations_directory():
     assert "prepend_sys_path = ." in alembic_ini
     assert "The real database URL is loaded by migrations/env.py" in alembic_ini
     assert "sqlalchemy.url = driver://user:pass@localhost/dbname" in alembic_ini
-    assert "sqlalchemy.url = postgresql+asyncpg://postgres:postgres@localhost:5432/match" not in alembic_ini
+    assert (
+        "sqlalchemy.url = postgresql+asyncpg://postgres:postgres@localhost:5432/match"
+        not in alembic_ini
+    )
 
 
 def test_migration_env_uses_project_settings_and_metadata():

@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from typing import Any, Literal, TypedDict
 
-
 Proficiency = Literal["basic", "intermediate", "advanced"]
 
 
@@ -48,6 +47,7 @@ JD_EXTRACTION_JSON_SCHEMA: dict[str, Any] = {
                             "architecture",
                             "soft_skill",
                             "domain_knowledge",
+                            "protocol",
                             "other",
                         ],
                     },
@@ -214,7 +214,12 @@ def validate_extracted_skills_payload(payload: Any) -> ExtractedSkillsPayload:
         category = _required_string(item, "category")
         proficiency = _required_string(item, "proficiency_required")
 
-        if category not in JD_EXTRACTION_JSON_SCHEMA["properties"]["skills"]["items"]["properties"]["category"]["enum"]:
+        if (
+            category
+            not in JD_EXTRACTION_JSON_SCHEMA["properties"]["skills"]["items"]["properties"][
+                "category"
+            ]["enum"]
+        ):
             raise ValueError(f"unsupported skill category: {category}")
         if proficiency not in ("basic", "intermediate", "advanced"):
             raise ValueError(f"unsupported proficiency_required: {proficiency}")
@@ -235,10 +240,7 @@ def validate_extracted_skills_payload(payload: Any) -> ExtractedSkillsPayload:
 
 
 def _format_user_prompt(jd_text: str) -> str:
-    return (
-        "请从以下 JD 中抽取技能，并严格输出 JSON：\n\n"
-        f"<jd>\n{jd_text}\n</jd>"
-    )
+    return "请从以下 JD 中抽取技能，并严格输出 JSON：\n\n" f"<jd>\n{jd_text}\n</jd>"
 
 
 def _required_string(item: dict[str, Any], field: str) -> str:

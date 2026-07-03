@@ -20,7 +20,9 @@ def test_build_jd_extraction_messages_contains_few_shot_examples():
     assert len(messages) == 6
     assert messages[-1]["role"] == "user"
     assert "Python" in messages[-1]["content"]
-    assert any(message["role"] == "assistant" and '"skills"' in message["content"] for message in messages)
+    assert any(
+        message["role"] == "assistant" and '"skills"' in message["content"] for message in messages
+    )
 
 
 def test_build_jd_extraction_messages_rejects_empty_jd():

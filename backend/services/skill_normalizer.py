@@ -89,6 +89,7 @@ CATEGORY_ALIASES: dict[str, str] = {
     "soft_skill": "soft_skill",
     "soft skill": "soft_skill",
     "domain_knowledge": "domain_knowledge",
+    "protocol": "protocol",
 }
 
 
@@ -104,7 +105,9 @@ class SkillNormalizer:
         self.use_llm_fallback = use_llm_fallback
         self.synonyms = dict(SKILL_SYNONYMS)
         if synonyms:
-            self.synonyms.update({self._canonical_key(key): value for key, value in synonyms.items()})
+            self.synonyms.update(
+                {self._canonical_key(key): value for key, value in synonyms.items()}
+            )
 
     async def normalize_skill(
         self,
@@ -183,7 +186,12 @@ class SkillNormalizer:
             ],
             response_format={"type": "json_object"},
         )
-        payload = json.loads(self._response_content(response))
+        try:
+            payload = json.loads(self._response_content(response))
+        except (json.JSONDecodeError, TypeError):
+            return None
+        if not isinstance(payload, dict):
+            return None
         normalized_name = self._clean_name(str(payload.get("normalized_name", "")))
         if not normalized_name:
             return None

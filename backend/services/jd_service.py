@@ -5,9 +5,19 @@ from typing import Any, Protocol
 
 from backend.core.deepseek_client import DeepSeekClient, get_deepseek_client
 from backend.services.embedding_service import EmbeddingService
-from backend.services.prompts.jd_extraction import build_jd_extraction_messages
-from backend.services.prompts.jd_extraction import parse_jd_extraction_response
+from backend.services.prompts.jd_extraction import (
+    ExtractedSkill,
+    ExtractedSkillsPayload,
+    build_jd_extraction_messages,
+    parse_jd_extraction_response,
+)
 from backend.services.skill_normalizer import SkillNormalizer
+
+PROFICIENCY_SCORE_MAP: dict[str, float] = {
+    "basic": 0.6,
+    "intermediate": 0.8,
+    "advanced": 0.95,
+}
 
 
 @dataclass(frozen=True)
@@ -34,14 +44,11 @@ class JdSkillRepository(Protocol):
         title: str | None = None,
         company: str | None = None,
         source: str | None = None,
-    ) -> Any:
-        ...
+    ) -> Any: ...
 
-    async def has_processed_jd(self, jd_id: int) -> bool:
-        ...
+    async def has_processed_jd(self, jd_id: int) -> bool: ...
 
-    async def list_jd_skills(self, jd_id: int) -> list[ExtractedSkillResult]:
-        ...
+    async def list_jd_skills(self, jd_id: int) -> list[ExtractedSkillResult]: ...
 
     async def get_or_create_skill(
         self,
@@ -50,8 +57,7 @@ class JdSkillRepository(Protocol):
         normalized_name: str,
         category: str,
         embedding: list[float],
-    ) -> Any:
-        ...
+    ) -> Any: ...
 
     async def link_jd_skill(
         self,
@@ -60,11 +66,9 @@ class JdSkillRepository(Protocol):
         skill_id: int,
         relevance_score: float,
         extraction_method: str,
-    ) -> Any:
-        ...
+    ) -> Any: ...
 
-    async def commit(self) -> None:
-        ...
+    async def commit(self) -> None: ...
 
 
 class SqlAlchemyJdSkillRepository:
@@ -98,7 +102,9 @@ class SqlAlchemyJdSkillRepository:
 
         from backend.models.jd_skill import JdSkill
 
-        result = await self.session.execute(select(JdSkill.id).where(JdSkill.jd_id == jd_id).limit(1))
+        result = await self.session.execute(
+            select(JdSkill.id).where(JdSkill.jd_id == jd_id).limit(1)
+        )
         return result.scalar_one_or_none() is not None
 
     async def list_jd_skills(self, jd_id: int) -> list[ExtractedSkillResult]:
@@ -119,7 +125,7 @@ class SqlAlchemyJdSkillRepository:
                 normalized_name=skill.normalized_name,
                 category=skill.category or "other",
                 proficiency_required=JdService.proficiency_for_score(jd_skill.relevance_score),
-                embedding=list(skill.embedding or []),
+                embedding=list(skill.embedding) if skill.embedding is not None else [],
             )
             for skill, jd_skill in rows
         ]
@@ -199,6 +205,7 @@ class JdService:
         self.deepseek_client = deepseek_client or get_deepseek_client()
         self.embedding_service = embedding_service or EmbeddingService()
         self.skill_normalizer = skill_normalizer or SkillNormalizer()
+        self.repository: JdSkillRepository | None
         if repository is not None:
             self.repository = repository
         elif session is not None:
@@ -276,7 +283,7 @@ class JdService:
         await self._commit()
         return JdExtractionResult(jd_id=jd_id, skills=results)
 
-    async def _extract_with_deepseek(self, jd_text: str) -> dict[str, Any]:
+    async def _extract_with_deepseek(self, jd_text: str) -> ExtractedSkillsPayload:
         response = await self.deepseek_client.create_chat_completion(
             build_jd_extraction_messages(jd_text),
             response_format={"type": "json_object"},
@@ -288,26 +295,26 @@ class JdService:
             return response["choices"][0]["message"]["content"]
         return response.choices[0].message.content
 
-    def _embedding_text(self, skill: dict[str, str]) -> str:
+    def _embedding_text(self, skill: ExtractedSkill) -> str:
         return (
             f"{skill['name']} | category: {skill['category']} | "
             f"proficiency: {skill['proficiency_required']}"
         )
 
     def _score_for_proficiency(self, proficiency: str) -> float:
-        return {
-            "basic": 0.6,
-            "intermediate": 0.8,
-            "advanced": 0.95,
-        }.get(proficiency, 0.8)
+        return self.score_for_proficiency(proficiency)
+
+    @staticmethod
+    def score_for_proficiency(proficiency: str) -> float:
+        return PROFICIENCY_SCORE_MAP.get(proficiency, PROFICIENCY_SCORE_MAP["intermediate"])
 
     @staticmethod
     def proficiency_for_score(score: float) -> str:
-        return {
-            0.6: "basic",
-            0.8: "intermediate",
-            0.95: "advanced",
-        }.get(round(score, 2), "intermediate")
+        rounded_score = round(score, 2)
+        for proficiency, mapped_score in PROFICIENCY_SCORE_MAP.items():
+            if rounded_score == mapped_score:
+                return proficiency
+        return "intermediate"
 
     async def _get_or_create_jd(self, **kwargs: Any) -> Any:
         if self.repository is None:

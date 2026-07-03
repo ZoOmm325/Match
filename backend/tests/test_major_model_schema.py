@@ -5,8 +5,14 @@ import pytest
 from pydantic import ValidationError
 
 from backend import schemas
-from backend.schemas.major import MajorCreate, MajorResponse
-
+from backend.schemas.major import (
+    MajorCreate,
+    MajorListResponse,
+    MajorResponse,
+    MajorSearchRequest,
+    MajorSearchResponse,
+    MajorSearchResultResponse,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -67,7 +73,6 @@ def test_major_model_declares_json_and_pgvector_fields():
     for expected in (
         '__tablename__ = "majors"',
         "from pgvector.sqlalchemy import Vector",
-        "from sqlalchemy import DateTime, JSON, String, Text, UniqueConstraint, func",
         'UniqueConstraint("code", name="uq_majors_code")',
         "name: Mapped[str]",
         "code: Mapped[str | None]",
@@ -78,6 +83,9 @@ def test_major_model_declares_json_and_pgvector_fields():
         "Vector(1024)",
     ):
         assert expected in model
+
+    for sqlalchemy_name in ("DateTime", "JSON", "String", "Text", "UniqueConstraint", "func"):
+        assert sqlalchemy_name in model
 
 
 def test_major_migration_creates_and_drops_majors_table():
@@ -94,6 +102,14 @@ def test_major_migration_creates_and_drops_majors_table():
 
 def test_schema_package_exports_major_schemas():
     assert "MajorCreate" in schemas.__all__
+    assert "MajorListResponse" in schemas.__all__
     assert "MajorResponse" in schemas.__all__
+    assert "MajorSearchRequest" in schemas.__all__
+    assert "MajorSearchResponse" in schemas.__all__
+    assert "MajorSearchResultResponse" in schemas.__all__
     assert schemas.MajorCreate is MajorCreate
+    assert schemas.MajorListResponse is MajorListResponse
     assert schemas.MajorResponse is MajorResponse
+    assert schemas.MajorSearchRequest is MajorSearchRequest
+    assert schemas.MajorSearchResponse is MajorSearchResponse
+    assert schemas.MajorSearchResultResponse is MajorSearchResultResponse

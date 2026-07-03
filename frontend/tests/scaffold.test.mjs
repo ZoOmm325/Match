@@ -9,6 +9,7 @@ test("package scripts expose Next.js development commands", async () => {
 
   assert.equal(pkg.scripts.dev, "next dev");
   assert.equal(pkg.scripts.build, "next build");
+  assert.equal(pkg.scripts.typecheck, "tsc --noEmit");
   assert.equal(pkg.dependencies.next.startsWith("^15."), true);
   assert.equal(pkg.devDependencies.tailwindcss.startsWith("^3."), true);
 });
@@ -21,9 +22,9 @@ test("app router pages exist for required routes", async () => {
 
   assert.match(layout, /href: "\/match"/);
   assert.match(layout, /href: "\/history"/);
-  assert.match(home, /Start matching/);
-  assert.match(match, /JD matching/);
-  assert.match(history, /Match history/);
+  assert.match(home, /开始匹配/);
+  assert.match(match, /redirect\("\/"\)/);
+  assert.match(history, /历史匹配记录/);
 });
 
 test("tailwind is wired into the app", async () => {

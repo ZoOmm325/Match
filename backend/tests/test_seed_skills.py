@@ -3,11 +3,12 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from backend.scripts.seed_skills import build_skill_embedding_text
-from backend.scripts.seed_skills import canonical_skill_key
-from backend.scripts.seed_skills import load_skill_seed_data
-from backend.scripts.seed_skills import seed_skills
-
+from backend.scripts.seed_skills import (
+    build_skill_embedding_text,
+    canonical_skill_key,
+    load_skill_seed_data,
+    seed_skills,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_PATH = ROOT / "backend" / "scripts" / "data" / "skills.json"
@@ -60,7 +61,9 @@ def test_skill_seed_json_contains_at_least_100_complete_records():
     records = load_skill_seed_data(DATA_PATH)
 
     assert len(records) >= 100
-    assert len({canonical_skill_key(record["normalized_name"]) for record in records}) == len(records)
+    assert len({canonical_skill_key(record["normalized_name"]) for record in records}) == len(
+        records
+    )
     assert {"programming_language", "framework", "database", "tool", "soft_skill"}.issubset(
         {record["category"] for record in records}
     )

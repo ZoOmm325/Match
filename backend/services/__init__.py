@@ -9,6 +9,15 @@ from backend.services.matching import (
     SkillMatcher,
     SkillMatchResult,
 )
+from backend.services.recommendation import (
+    PopularMajor,
+    RankedRecommendation,
+    RecommendationFallbackService,
+    RecommendationRanker,
+    RecommendationScore,
+    RecommendationScorer,
+    ScoreWeights,
+)
 from backend.services.skill_normalizer import NormalizedSkill, SkillNormalizer
 from backend.services.vector_service import VectorSearchResult, VectorService
 
@@ -24,6 +33,13 @@ __all__ = [
     "MatchingPipeline",
     "MatchingPipelineResult",
     "NormalizedSkill",
+    "PopularMajor",
+    "RankedRecommendation",
+    "RecommendationFallbackService",
+    "RecommendationRanker",
+    "RecommendationScore",
+    "RecommendationScorer",
+    "ScoreWeights",
     "SkillMatcher",
     "SkillMatchResult",
     "SkillNormalizer",

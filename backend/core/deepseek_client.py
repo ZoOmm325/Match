@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from collections import deque
 from collections.abc import Awaitable, Callable, Sequence
+from threading import Lock
 from time import monotonic
 from typing import Any
 
 from backend.core.config import Settings, get_settings
 
-
 Message = dict[str, Any]
 _client: DeepSeekClient | None = None
+_client_lock = Lock()
 
 
 class DeepSeekClientConfigurationError(RuntimeError):
@@ -19,8 +21,7 @@ class DeepSeekClientConfigurationError(RuntimeError):
 
 def _get_retryable_deepseek_errors() -> tuple[type[BaseException], ...]:
     try:
-        from openai import APIConnectionError, APITimeoutError, InternalServerError
-        from openai import RateLimitError
+        from openai import APIConnectionError, APITimeoutError, InternalServerError, RateLimitError
     except ModuleNotFoundError:
         return ()
 
@@ -110,12 +111,24 @@ class DeepSeekClient:
             lambda: self._client.chat.completions.create(**payload)
         )
 
+    async def close(self) -> None:
+        close = getattr(self._client, "close", None) or getattr(self._client, "aclose", None)
+        if close is None:
+            return
+        result = close()
+        if inspect.isawaitable(result):
+            await result
+
     async def _request_with_retry(self, request: Callable[[], Awaitable[Any]]) -> Any:
         await self._rate_limiter.acquire()
 
         try:
-            from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt
-            from tenacity import wait_exponential
+            from tenacity import (
+                AsyncRetrying,
+                retry_if_exception_type,
+                stop_after_attempt,
+                wait_exponential,
+            )
         except ModuleNotFoundError:
             return await request()
 
@@ -134,5 +147,16 @@ class DeepSeekClient:
 def get_deepseek_client() -> DeepSeekClient:
     global _client
     if _client is None:
-        _client = DeepSeekClient()
+        with _client_lock:
+            if _client is None:
+                _client = DeepSeekClient()
     return _client
+
+
+async def close_deepseek_client() -> None:
+    global _client
+    with _client_lock:
+        client = _client
+        _client = None
+    if client is not None:
+        await client.close()

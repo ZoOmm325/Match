@@ -6,7 +6,6 @@ from typing import Any, Callable, Literal
 
 from backend.services.embedding_service import EMBEDDING_DIMENSIONS
 
-
 VectorTable = Literal["skills", "skill", "majors", "major"]
 TableResolver = Callable[[str], tuple[str, type[Any]]]
 StatementBuilder = Callable[[type[Any], list[float], int], Any]
@@ -66,8 +65,13 @@ class VectorService:
 
     def _validate_query_embedding(self, query_embedding: list[float]) -> list[float]:
         if len(query_embedding) != EMBEDDING_DIMENSIONS:
-            raise ValueError(f"query_embedding must contain exactly {EMBEDDING_DIMENSIONS} dimensions")
-        if not all(isinstance(value, (int, float)) for value in query_embedding):
+            raise ValueError(
+                f"query_embedding must contain exactly {EMBEDDING_DIMENSIONS} dimensions"
+            )
+        if not all(
+            isinstance(value, (int, float)) and not isinstance(value, bool)
+            for value in query_embedding
+        ):
             raise ValueError("query_embedding must contain only numeric values")
         return [float(value) for value in query_embedding]
 

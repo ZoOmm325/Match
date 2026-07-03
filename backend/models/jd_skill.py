@@ -12,7 +12,7 @@ class JdSkill(Base):
             name="ck_jd_skills_relevance_score_range",
         ),
         CheckConstraint(
-            "extraction_method IN ('llm', 'manual')",
+            "extraction_method IN ('llm', 'manual', 'keyword_rules')",
             name="ck_jd_skills_extraction_method",
         ),
         UniqueConstraint("jd_id", "skill_id", name="uq_jd_skills_jd_id_skill_id"),

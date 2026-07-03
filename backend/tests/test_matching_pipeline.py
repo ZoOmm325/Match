@@ -227,7 +227,9 @@ def test_sqlalchemy_repository_inserts_and_updates_match_results(monkeypatch):
     monkeypatch.setitem(
         __import__("sys").modules,
         "sqlalchemy",
-        SimpleNamespace(select=lambda model: SimpleNamespace(where=lambda *args: ("select", model, args))),
+        SimpleNamespace(
+            select=lambda model: SimpleNamespace(where=lambda *args: ("select", model, args))
+        ),
     )
 
     session = FakeSession()
@@ -254,7 +256,9 @@ def test_sqlalchemy_repository_inserts_and_updates_match_results(monkeypatch):
     session = FakeSession(existing=existing)
     repository = SqlAlchemyMatchResultRepository(session)
 
-    count = asyncio.run(repository.save_match_results(jd_id=1, major_matches=[major_match(final_score=0.91)]))
+    count = asyncio.run(
+        repository.save_match_results(jd_id=1, major_matches=[major_match(final_score=0.91)])
+    )
 
     assert count == 1
     assert session.added == []

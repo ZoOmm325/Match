@@ -6,7 +6,6 @@ from pydantic import ValidationError
 from backend import schemas
 from backend.schemas.match_result import MatchResultCreate, MatchResultResponse
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -69,8 +68,8 @@ def test_match_result_model_declares_relationships_and_constraints():
 
     for expected in (
         '__tablename__ = "match_results"',
-        "ForeignKey(\"jds.id\", ondelete=\"CASCADE\")",
-        "ForeignKey(\"majors.id\", ondelete=\"CASCADE\")",
+        'ForeignKey("jds.id", ondelete="CASCADE")',
+        'ForeignKey("majors.id", ondelete="CASCADE")',
         "similarity_score: Mapped[float]",
         "final_score: Mapped[float]",
         "rank: Mapped[int]",
@@ -78,13 +77,13 @@ def test_match_result_model_declares_relationships_and_constraints():
         "similarity_score >= 0 AND similarity_score <= 1",
         "final_score >= 0 AND final_score <= 1",
         "rank > 0",
-        "UniqueConstraint(\"jd_id\", \"major_id\"",
-        "relationship(back_populates=\"match_results\")",
+        'UniqueConstraint("jd_id", "major_id"',
+        'relationship(back_populates="match_results")',
     ):
         assert expected in model
 
-    assert "match_results: Mapped[list[\"MatchResult\"]]" in jd_model
-    assert "match_results: Mapped[list[\"MatchResult\"]]" in major_model
+    assert 'match_results: Mapped[list["MatchResult"]]' in jd_model
+    assert 'match_results: Mapped[list["MatchResult"]]' in major_model
 
 
 def test_match_result_migration_creates_result_table():

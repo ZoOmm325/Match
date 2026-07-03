@@ -4,11 +4,11 @@ Revision ID: 006_create_match_result_table
 Revises: 005_create_jd_skill_table
 Create Date: 2026-06-20
 """
+
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision: str = "006_create_match_result_table"
 down_revision: Union[str, None] = "005_create_jd_skill_table"
@@ -35,7 +35,9 @@ def upgrade() -> None:
             name=op.f("ck_match_results_final_score_range"),
         ),
         sa.CheckConstraint("rank > 0", name=op.f("ck_match_results_rank_positive")),
-        sa.ForeignKeyConstraint(["jd_id"], ["jds.id"], name=op.f("fk_match_results_jd_id_jds"), ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["jd_id"], ["jds.id"], name=op.f("fk_match_results_jd_id_jds"), ondelete="CASCADE"
+        ),
         sa.ForeignKeyConstraint(
             ["major_id"],
             ["majors.id"],

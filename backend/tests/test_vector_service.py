@@ -139,6 +139,14 @@ def test_search_rejects_non_numeric_embedding_values():
         asyncio.run(service.search_similar(embedding))
 
 
+def test_search_rejects_boolean_embedding_values():
+    service = make_service([])
+    embedding = [0.1] * 1023 + [True]
+
+    with pytest.raises(ValueError, match="numeric"):
+        asyncio.run(service.search_similar(embedding))
+
+
 def test_search_rejects_invalid_top_k():
     service = make_service([])
 

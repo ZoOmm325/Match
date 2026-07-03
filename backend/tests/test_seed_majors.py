@@ -3,10 +3,11 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from backend.scripts.seed_majors import build_major_embedding_text
-from backend.scripts.seed_majors import load_major_seed_data
-from backend.scripts.seed_majors import seed_majors
-
+from backend.scripts.seed_majors import (
+    build_major_embedding_text,
+    load_major_seed_data,
+    seed_majors,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_PATH = ROOT / "backend" / "scripts" / "data" / "majors.json"

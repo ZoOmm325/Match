@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from logging.config import fileConfig
 from pathlib import Path
-import sys
 
 from alembic import context
 from sqlalchemy import pool
@@ -14,10 +14,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
+import backend.models  # noqa: F401
 from backend.core.config import get_settings
 from backend.core.database import Base
-import backend.models  # noqa: F401
-
 
 config = context.config
 

@@ -1,4 +1,13 @@
-from backend.schemas.jd import JdCreate, JdResponse
+from backend.schemas.jd import (
+    ExtractedJdSkillResponse,
+    ExtractedSkillSummaryResponse,
+    JdCreate,
+    JdDetailResponse,
+    JdExtractionStoredData,
+    JdListItemResponse,
+    JdListResponse,
+    JdResponse,
+)
 from backend.schemas.jd_extraction import (
     ApiResponse,
     JdSkillExtractionData,
@@ -6,23 +15,64 @@ from backend.schemas.jd_extraction import (
     SkillExtractionItem,
 )
 from backend.schemas.jd_skill import JdSkillCreate, JdSkillResponse
-from backend.schemas.major import MajorCreate, MajorResponse
-from backend.schemas.match_result import MatchResultCreate, MatchResultResponse
-from backend.schemas.skill import SkillCreate, SkillResponse
+from backend.schemas.major import (
+    MajorCreate,
+    MajorListResponse,
+    MajorResponse,
+    MajorSearchRequest,
+    MajorSearchResponse,
+    MajorSearchResultResponse,
+)
+from backend.schemas.match_result import (
+    MatchBySkillsRequest,
+    MatchHistoryResponseData,
+    MatchRecommendationResponse,
+    MatchRequest,
+    MatchResponseData,
+    MatchResultCreate,
+    MatchResultResponse,
+    SkillMatchInput,
+)
+from backend.schemas.skill import (
+    SkillCategoriesResponse,
+    SkillCreate,
+    SkillListResponse,
+    SkillResponse,
+    SkillSummaryResponse,
+)
 
 __all__ = [
     "ApiResponse",
+    "ExtractedJdSkillResponse",
+    "ExtractedSkillSummaryResponse",
     "JdSkillExtractionData",
     "JdSkillExtractionRequest",
     "JdCreate",
+    "JdDetailResponse",
+    "JdExtractionStoredData",
+    "JdListItemResponse",
+    "JdListResponse",
     "JdResponse",
     "JdSkillCreate",
     "JdSkillResponse",
     "MajorCreate",
+    "MajorListResponse",
     "MajorResponse",
+    "MajorSearchRequest",
+    "MajorSearchResponse",
+    "MajorSearchResultResponse",
+    "MatchBySkillsRequest",
+    "MatchHistoryResponseData",
+    "MatchRecommendationResponse",
+    "MatchRequest",
+    "MatchResponseData",
     "MatchResultCreate",
     "MatchResultResponse",
+    "SkillMatchInput",
     "SkillExtractionItem",
+    "SkillCategoriesResponse",
     "SkillCreate",
+    "SkillListResponse",
     "SkillResponse",
+    "SkillSummaryResponse",
 ]

@@ -4,9 +4,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from backend.schemas.jd import JdCreate, JdResponse
 from backend import schemas
-
+from backend.schemas.jd import JdCreate, JdResponse
 
 ROOT = Path(__file__).resolve().parents[2]
 

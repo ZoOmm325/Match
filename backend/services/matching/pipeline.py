@@ -25,8 +25,7 @@ class MatchResultRepository(Protocol):
         *,
         jd_id: int,
         major_matches: list[MajorMatchResult],
-    ) -> int:
-        ...
+    ) -> int: ...
 
 
 class SqlAlchemyMatchResultRepository:
