@@ -431,3 +431,48 @@ docker compose down
 ```
 
 Use `/api/health` to verify the backend and `/docs` to explore and execute API requests.
+
+## 服务器生产部署
+
+生产环境使用 `docker-compose.prod.yml`，由 Nginx 提供统一入口。只有
+`${HTTP_PORT:-80}` 会暴露到宿主机，PostgreSQL、后端和前端仅在 Docker
+内部网络中通信。默认读取 `.env.production`；也可通过 `ENV_FILE` 指定
+其他后端环境变量文件。
+
+```bash
+cp .env.production.example .env.production
+```
+
+编辑 `.env.production`，至少替换数据库密码、`DATABASE_URL`、
+`DEEPSEEK_API_KEY` 和 `CORS_ORIGINS`。`POSTGRES_PASSWORD` 与
+`DATABASE_URL` 中的密码必须保持一致；若密码含 URL 特殊字符，请在
+`DATABASE_URL` 中进行百分号编码。
+
+构建并启动：
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env.production -f docker-compose.prod.yml ps
+curl http://127.0.0.1:${HTTP_PORT:-80}/health
+curl http://127.0.0.1:${HTTP_PORT:-80}/api/health
+```
+
+首次部署后导入基础数据（命令可安全重复执行）：
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml run --rm backend python -m backend.scripts.seed_skills
+docker compose --env-file .env.production -f docker-compose.prod.yml run --rm backend python -m backend.scripts.seed_majors
+```
+
+数据库迁移会在后端容器启动时自动执行。日常运维命令：
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml logs -f
+docker compose --env-file .env.production -f docker-compose.prod.yml pull
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env.production -f docker-compose.prod.yml down
+```
+
+若服务器启用了防火墙，请只开放实际使用的 HTTP/HTTPS 端口。正式域名
+启用 HTTPS 时，建议在本编排前增加已有的 TLS 反向代理或云负载均衡器，
+并将 `CORS_ORIGINS` 改为对应的 `https://` 域名。
