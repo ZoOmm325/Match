@@ -20,7 +20,22 @@ def test_docs_and_openapi_are_available():
     assert openapi_response.json()["info"]["title"] == "JD Major Match API"
 
 
-def test_settings_can_load_from_env_file(tmp_path: Path):
+def test_settings_can_load_from_env_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    for variable in (
+        "APP_NAME",
+        "API_PREFIX",
+        "CORS_ORIGINS",
+        "DATABASE_URL",
+        "DEEPSEEK_API_KEY",
+        "DEEPSEEK_MODEL",
+        "DEEPSEEK_BASE_URL",
+        "EMBEDDING_MODEL",
+    ):
+        monkeypatch.delenv(variable, raising=False)
+
     env_file = tmp_path / ".env"
     env_file.write_text(
         "\n".join(
@@ -52,7 +67,12 @@ def test_settings_can_load_from_env_file(tmp_path: Path):
     assert settings.deepseek_base_url == "https://api.deepseek.com"
 
 
-def test_settings_reject_empty_deepseek_api_key(tmp_path: Path):
+def test_settings_reject_empty_deepseek_api_key(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+
     env_file = tmp_path / ".env"
     env_file.write_text("DEEPSEEK_API_KEY=   \n", encoding="utf-8")
 
@@ -60,7 +80,12 @@ def test_settings_reject_empty_deepseek_api_key(tmp_path: Path):
         Settings(_env_file=env_file)
 
 
-def test_settings_reject_empty_cors_origin_list(tmp_path: Path):
+def test_settings_reject_empty_cors_origin_list(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.delenv("CORS_ORIGINS", raising=False)
+
     env_file = tmp_path / ".env"
     env_file.write_text("CORS_ORIGINS=[]\n", encoding="utf-8")
 
