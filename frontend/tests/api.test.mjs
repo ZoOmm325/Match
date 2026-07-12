@@ -12,7 +12,10 @@ test("api client exposes typed backend operations", async () => {
     "matchBySkills",
     "getMatchResult",
     "getJds",
+    "getJdTrend",
+    "getJobMarketTrend",
     "getJd",
+    "fetchPublicJd",
     "deleteJd",
     "getMajors",
     "getMajor",
@@ -31,7 +34,10 @@ test("api endpoint mappings match backend routes", async () => {
   assert.match(source, /apiRequest<MatchResponseData>\(\s*"\/match"/);
   assert.match(source, /apiRequest<MatchResponseData>\(\s*"\/match\/by-skills"/);
   assert.match(source, /`\/match\/\$\{encodeURIComponent\(jdId\)\}`/);
+  assert.match(source, /apiRequest<JdFetchData>\(\s*"\/jd\/fetch"/);
   assert.match(source, /withQuery\("\/majors\/search"/);
+  assert.match(source, /withQuery\("\/jd\/trend"/);
+  assert.match(source, /withQuery\("\/jd\/market-trend"/);
   assert.match(source, /withQuery\("\/skills"/);
   assert.match(source, /apiRequest<SkillCategoriesData>\(\s*"\/skills\/categories"/);
 });
@@ -45,6 +51,7 @@ test("api client uses configured base URL and centralized errors", async () => {
   assert.match(source, /Server returned an invalid JSON response/);
   assert.match(source, /does not match the API contract/);
   assert.match(source, /value\.recommendations\.every\(isMatchRecommendation\)/);
+  assert.match(source, /function isJdFetchData/);
   for (const field of [
     "major_id",
     "major_code",

@@ -57,7 +57,7 @@ test("global layout mounts shared feedback and responsive shell", async () => {
   assert.match(layout, /<ToastProvider>/);
   assert.match(layout, /<ErrorBoundary>/);
   assert.match(layout, /<footer/);
-  assert.match(layout, /grid grid-cols-4/);
+  assert.match(layout, /grid grid-cols-3/);
   assert.match(styles, /min-width: 320px/);
   assert.match(styles, /prefers-reduced-motion: reduce/);
   assert.match(styles, /--page-header-height/);
@@ -67,6 +67,8 @@ test("list and result pages consume the shared UI components", async () => {
   const history = await read("app/history/page.tsx");
   const majors = await read("app/majors/page.tsx");
   const results = await read("components/MatchResult.tsx");
+  const card = await read("components/MajorCard.tsx");
+  const inlineDetail = await read("components/MajorInlineDetail.tsx");
 
   assert.match(history, /import Pagination from "@\/components\/ui\/Pagination"/);
   assert.match(history, /<Pagination/);
@@ -74,4 +76,8 @@ test("list and result pages consume the shared UI components", async () => {
   assert.match(majors, /<Pagination/);
   assert.match(results, /<Loading label="正在生成匹配结果"/);
   assert.match(results, /<EmptyState/);
+  assert.match(card, /<MajorInlineDetail majorId=\{recommendation\.major_id\}/);
+  assert.match(inlineDetail, /getMajor\(/);
+  assert.match(inlineDetail, /专业简介/);
+  assert.match(inlineDetail, /课程体系/);
 });

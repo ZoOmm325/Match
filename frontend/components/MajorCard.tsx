@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { MatchRecommendation } from "@/lib/api";
+import MajorInlineDetail from "@/components/MajorInlineDetail";
 import ScoreBar from "@/components/ScoreBar";
 import SkillTag from "@/components/SkillTag";
 
@@ -81,6 +82,10 @@ export default function MajorCard({ recommendation, defaultExpanded = false }: M
                   label="就业方向匹配"
                   value={recommendation.employment_alignment_score}
                 />
+              </div>
+              <div className="mt-5 border-t border-slate-100 pt-4">
+                <h4 className="text-sm font-semibold text-slate-900">专业详情</h4>
+                <MajorInlineDetail majorId={recommendation.major_id} />
               </div>
             </div>
           ) : null}

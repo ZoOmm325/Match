@@ -139,8 +139,8 @@ def test_match_jd_to_majors_uses_jd_service_extraction():
 
     assert jd_service.calls == ["Need ML engineer."]
     assert results[0].major_name == "人工智能"
-    assert results[0].matched_skills == []
-    assert results[0].missing_skills == ["Machine Learning"]
+    assert results[0].matched_skills == ["Machine Learning"]
+    assert results[0].missing_skills == []
 
 
 def test_match_skills_to_majors_returns_empty_for_empty_skills():
@@ -186,6 +186,141 @@ def test_split_covered_skills_ignores_incidental_description_mentions():
 
     assert matched == []
     assert missing == ["Python"]
+
+
+def test_split_covered_skills_derives_database_skills_from_curriculum():
+    matcher = MajorMatcher(vector_service=FakeVectorService([]))
+    major = SimpleNamespace(
+        name="软件工程",
+        code="080902",
+        category="工学",
+        description="不依赖描述中的 PostgreSQL 字样做覆盖判断。",
+        curriculum={"core": ["数据库系统", "软件需求工程", "软件测试技术"]},
+    )
+    skills = [
+        skill("PostgreSQL", "database", [1.0]),
+        skill("Database Design", "database", [1.0]),
+        skill("Unit Testing", "testing", [1.0]),
+        skill("Docker", "devops", [1.0]),
+    ]
+
+    matched, missing = matcher._split_covered_skills(major, skills)
+
+    assert matched == ["PostgreSQL", "Database Design", "Unit Testing", "Docker"]
+    assert missing == []
+
+
+def test_split_covered_skills_derives_ai_skills_from_major_and_courses():
+    matcher = MajorMatcher(vector_service=FakeVectorService([]))
+    major = SimpleNamespace(
+        name="人工智能",
+        code="080717T",
+        category="工学",
+        description=None,
+        curriculum={"core": ["深度学习", "自然语言处理"]},
+    )
+    skills = [
+        skill("Machine Learning", "ai", [1.0]),
+        skill("PyTorch", "ai", [1.0]),
+        skill("NLP", "ai", [1.0]),
+        skill("Kubernetes", "devops", [1.0]),
+    ]
+
+    matched, missing = matcher._split_covered_skills(major, skills)
+
+    assert matched == ["Machine Learning", "PyTorch", "NLP"]
+    assert missing == ["Kubernetes"]
+
+
+def test_split_covered_skills_does_not_treat_security_testing_as_software_testing():
+    matcher = MajorMatcher(vector_service=FakeVectorService([]))
+    major = SimpleNamespace(
+        name="信息安全",
+        code="080904K",
+        category="工学",
+        description=None,
+        curriculum={"practice": ["渗透测试实训", "安全攻防演练"]},
+    )
+
+    matched, missing = matcher._split_covered_skills(
+        major,
+        [
+            skill("Cybersecurity", "domain_knowledge", [1.0]),
+            skill("Selenium", "testing", [1.0]),
+        ],
+    )
+
+    assert matched == ["Cybersecurity"]
+    assert missing == ["Selenium"]
+
+
+def test_split_covered_skills_adds_common_foundation_for_computer_majors():
+    matcher = MajorMatcher(vector_service=FakeVectorService([]))
+    major = SimpleNamespace(
+        name="人工智能",
+        code="080717T",
+        category="工学",
+        description=None,
+        curriculum={"core": ["机器学习", "自然语言处理"]},
+    )
+    skills = [
+        skill("Linux", "operating_system", [1.0]),
+        skill("Docker", "devops", [1.0]),
+        skill("CI/CD", "devops", [1.0]),
+        skill("REST API", "backend", [1.0]),
+        skill("FastAPI", "framework", [1.0]),
+    ]
+
+    matched, missing = matcher._split_covered_skills(major, skills)
+
+    assert matched == ["Linux", "Docker", "CI/CD", "REST API"]
+    assert missing == ["FastAPI"]
+
+
+def test_split_covered_skills_covers_fastapi_only_for_software_or_backend_direction():
+    matcher = MajorMatcher(vector_service=FakeVectorService([]))
+    major = SimpleNamespace(
+        name="软件工程",
+        code="080902",
+        category="工学",
+        description=None,
+        curriculum={"core": ["软件需求工程", "接口设计与后端开发"]},
+    )
+
+    matched, missing = matcher._split_covered_skills(
+        major,
+        [
+            skill("FastAPI", "framework", [1.0]),
+            skill("Spring Boot", "framework", [1.0]),
+            skill("Docker", "devops", [1.0]),
+        ],
+    )
+
+    assert matched == ["FastAPI", "Spring Boot", "Docker"]
+    assert missing == []
+
+
+def test_split_covered_skills_does_not_add_computer_foundation_to_business_major():
+    matcher = MajorMatcher(vector_service=FakeVectorService([]))
+    major = SimpleNamespace(
+        name="工商管理",
+        code="120201",
+        category="管理学",
+        description="数字化管理岗位可能协同软件团队。",
+        curriculum={"core": ["管理学", "会计学", "市场营销"]},
+    )
+
+    matched, missing = matcher._split_covered_skills(
+        major,
+        [
+            skill("Linux", "operating_system", [1.0]),
+            skill("Docker", "devops", [1.0]),
+            skill("CI/CD", "devops", [1.0]),
+        ],
+    )
+
+    assert matched == []
+    assert missing == ["Linux", "Docker", "CI/CD"]
 
 
 def test_major_matcher_validates_inputs_and_dependencies():

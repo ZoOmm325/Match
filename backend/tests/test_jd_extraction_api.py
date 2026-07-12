@@ -3,14 +3,20 @@ from datetime import datetime, timezone
 from starlette.testclient import TestClient
 
 from backend.main import app
-from backend.routers.jd import get_jd_read_repository, get_jd_service
+from backend.routers.jd import get_jd_read_repository, get_jd_service, get_public_job_fetcher
 from backend.schemas.jd import (
     ExtractedJdSkillResponse,
+    JdFetchResponse,
     JdDetailResponse,
     JdListItemResponse,
     JdListResponse,
+    JdTrendPointResponse,
+    JdTrendResponse,
+    JobMarketTrendPointResponse,
+    JobMarketTrendResponse,
 )
 from backend.services.jd_service import ExtractedSkillResult, JdExtractionResult
+from backend.services.job_fetcher import PublicJdFetchError
 
 client = TestClient(app)
 
@@ -98,11 +104,51 @@ class FakeJdReadRepository:
             offset=offset,
         )
 
+    async def get_jd_trend(self, *, days):
+        return JdTrendResponse(
+            days=days,
+            total=1,
+            points=[
+                JdTrendPointResponse(date="2026-06-21", count=1),
+            ],
+        )
+
+    async def get_job_market_trend(self, *, keyword, years):
+        return JobMarketTrendResponse(
+            keyword=keyword,
+            years=years,
+            total=3,
+            points=[
+                JobMarketTrendPointResponse(year=2022, count=0),
+                JobMarketTrendPointResponse(year=2023, count=1),
+                JobMarketTrendPointResponse(year=2024, count=2),
+            ],
+        )
+
     async def delete_jd(self, jd_id):
         if jd_id != self.detail.id:
             return False
         self.deleted.append(jd_id)
         return True
+
+
+class FakePublicJobFetcher:
+    def __init__(self, *, fail=False):
+        self.fail = fail
+        self.calls = []
+
+    async def fetch(self, payload):
+        self.calls.append(payload)
+        if self.fail:
+            raise PublicJdFetchError("未找到可公开访问且允许抓取的岗位 JD")
+        return JdFetchResponse(
+            keyword=payload.keyword,
+            title="机械设计工程师",
+            source_url="https://example.com/jobs/1",
+            source_domain="example.com",
+            jd_text="岗位职责：负责机械结构设计、工程图绘制和量产问题分析。任职要求：熟悉机械原理、材料力学和 SolidWorks。",
+            inspected_urls=["https://example.com/jobs/1"],
+        )
 
 
 def setup_function():
@@ -168,6 +214,47 @@ def test_extract_jd_skills_legacy_api_still_works():
     assert response.json()["code"] == 0
 
 
+def test_fetch_public_jd_api_returns_public_jd_text():
+    fetcher = FakePublicJobFetcher()
+    app.dependency_overrides[get_public_job_fetcher] = lambda: fetcher
+
+    response = client.post("/api/jd/fetch", json={"keyword": "机械设计工程师"})
+
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["code"] == 0
+    assert body["data"]["title"] == "机械设计工程师"
+    assert "机械结构设计" in body["data"]["jd_text"]
+    assert body["data"]["source_domain"] == "example.com"
+    assert fetcher.calls[0].keyword == "机械设计工程师"
+
+
+def test_fetch_public_jd_api_returns_404_when_no_public_page_found():
+    app.dependency_overrides[get_public_job_fetcher] = lambda: FakePublicJobFetcher(fail=True)
+
+    response = client.post("/api/jd/fetch", json={"keyword": "不存在岗位"})
+
+    assert response.status_code == 404
+    assert response.json()["message"] == "未找到可公开访问且允许抓取的岗位 JD"
+
+
+def test_fetch_public_jd_api_rejects_invalid_public_url():
+    class InvalidUrlFetcher:
+        async def fetch(self, payload):
+            raise ValueError("source_url 必须是 http 或 https 开头的公开页面地址")
+
+    app.dependency_overrides[get_public_job_fetcher] = lambda: InvalidUrlFetcher()
+
+    response = client.post(
+        "/api/jd/fetch",
+        json={"keyword": "机械设计工程师", "source_url": "not-a-url"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["message"] == "source_url 必须是 http 或 https 开头的公开页面地址"
+
+
 def test_get_jd_detail_api_returns_skills():
     repository = FakeJdReadRepository()
     app.dependency_overrides[get_jd_read_repository] = lambda: repository
@@ -204,6 +291,36 @@ def test_list_jds_api_supports_pagination():
     assert body["data"]["limit"] == 5
     assert body["data"]["offset"] == 10
     assert body["data"]["items"][0]["skill_count"] == 1
+
+
+def test_get_jd_trend_api_returns_daily_counts():
+    repository = FakeJdReadRepository()
+    app.dependency_overrides[get_jd_read_repository] = lambda: repository
+
+    response = client.get("/api/jd/trend?days=7")
+
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["data"]["days"] == 7
+    assert body["data"]["total"] == 1
+    assert body["data"]["points"][0] == {"date": "2026-06-21", "count": 1}
+
+
+def test_get_job_market_trend_api_returns_yearly_keyword_counts():
+    repository = FakeJdReadRepository()
+    app.dependency_overrides[get_jd_read_repository] = lambda: repository
+
+    response = client.get("/api/jd/market-trend?keyword=Backend%20Engineer&years=3")
+
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["data"]["keyword"] == "Backend Engineer"
+    assert body["data"]["years"] == 3
+    assert body["data"]["total"] == 3
+    assert body["data"]["data_source"] == "local_jd_records"
+    assert body["data"]["points"][-1] == {"year": 2024, "count": 2}
 
 
 def test_delete_jd_api_deletes_existing_jd():

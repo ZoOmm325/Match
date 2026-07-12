@@ -113,6 +113,48 @@ export interface JdListData {
   offset: number;
 }
 
+export interface JdTrendPoint {
+  date: string;
+  count: number;
+}
+
+export interface JdTrendData {
+  days: number;
+  total: number;
+  points: JdTrendPoint[];
+}
+
+export interface JobMarketTrendPoint {
+  year: number;
+  count: number;
+}
+
+export interface JobMarketTrendData {
+  keyword: string;
+  years: number;
+  total: number;
+  data_source: string;
+  points: JobMarketTrendPoint[];
+}
+
+export interface JdFetchRequest {
+  keyword: string;
+  city?: string;
+  source_url?: string;
+  max_results?: number;
+}
+
+export interface JdFetchData {
+  keyword: string;
+  title: string | null;
+  company: string | null;
+  source_url: string | null;
+  source_domain: string | null;
+  jd_text: string;
+  inspected_urls: string[];
+  from_cache: boolean;
+}
+
 export interface Major {
   id: number;
   name: string;
@@ -209,6 +251,29 @@ export async function getMatchResult(jdId: number): Promise<MatchHistoryData> {
 
 export async function getJds(options: PaginationOptions = {}): Promise<JdListData> {
   return apiRequest<JdListData>(withQuery("/jd", options), {}, isJdListData);
+}
+
+export async function getJdTrend(days = 30): Promise<JdTrendData> {
+  return apiRequest<JdTrendData>(withQuery("/jd/trend", { days }), {}, isJdTrendData);
+}
+
+export async function getJobMarketTrend(keyword: string, years = 5): Promise<JobMarketTrendData> {
+  return apiRequest<JobMarketTrendData>(
+    withQuery("/jd/market-trend", { keyword, years }),
+    {},
+    isJobMarketTrendData
+  );
+}
+
+export async function fetchPublicJd(payload: JdFetchRequest): Promise<JdFetchData> {
+  return apiRequest<JdFetchData>(
+    "/jd/fetch",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    isJdFetchData
+  );
 }
 
 export async function getJd(jdId: number): Promise<JdDetail> {
@@ -415,6 +480,50 @@ function isJdListData(value: unknown): value is JdListData {
         typeof item.raw_text === "string" &&
         typeof item.skill_count === "number"
     )
+  );
+}
+
+function isJdTrendPoint(value: unknown): value is JdTrendPoint {
+  return isRecord(value) && typeof value.date === "string" && typeof value.count === "number";
+}
+
+function isJdTrendData(value: unknown): value is JdTrendData {
+  return (
+    isRecord(value) &&
+    typeof value.days === "number" &&
+    typeof value.total === "number" &&
+    Array.isArray(value.points) &&
+    value.points.every(isJdTrendPoint)
+  );
+}
+
+function isJobMarketTrendPoint(value: unknown): value is JobMarketTrendPoint {
+  return isRecord(value) && typeof value.year === "number" && typeof value.count === "number";
+}
+
+function isJobMarketTrendData(value: unknown): value is JobMarketTrendData {
+  return (
+    isRecord(value) &&
+    typeof value.keyword === "string" &&
+    typeof value.years === "number" &&
+    typeof value.total === "number" &&
+    typeof value.data_source === "string" &&
+    Array.isArray(value.points) &&
+    value.points.every(isJobMarketTrendPoint)
+  );
+}
+
+function isJdFetchData(value: unknown): value is JdFetchData {
+  return (
+    isRecord(value) &&
+    typeof value.keyword === "string" &&
+    typeof value.jd_text === "string" &&
+    (value.title === null || typeof value.title === "string") &&
+    (value.company === null || typeof value.company === "string") &&
+    (value.source_url === null || typeof value.source_url === "string") &&
+    (value.source_domain === null || typeof value.source_domain === "string") &&
+    isStringArray(value.inspected_urls) &&
+    typeof value.from_cache === "boolean"
   );
 }
 

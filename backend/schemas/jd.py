@@ -81,3 +81,57 @@ class JdListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class JdTrendPointResponse(BaseModel):
+    date: str
+    count: int
+
+
+class JdTrendResponse(BaseModel):
+    days: int
+    total: int
+    points: list[JdTrendPointResponse]
+
+
+class JobMarketTrendPointResponse(BaseModel):
+    year: int
+    count: int
+
+
+class JobMarketTrendResponse(BaseModel):
+    keyword: str
+    years: int
+    total: int
+    data_source: str = "local_jd_records"
+    points: list[JobMarketTrendPointResponse]
+
+
+class JdFetchRequest(BaseModel):
+    keyword: str = Field(..., min_length=2, max_length=100, description="Job title keyword")
+    city: str | None = Field(None, max_length=50, description="Optional city keyword")
+    source_url: str | None = Field(
+        None,
+        max_length=2000,
+        description="Optional public job detail URL. Login-only pages are not supported.",
+    )
+    max_results: int = Field(3, ge=1, le=5, description="Maximum public pages to inspect")
+
+    @field_validator("keyword", "city", "source_url")
+    @classmethod
+    def normalize_fetch_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
+class JdFetchResponse(BaseModel):
+    keyword: str
+    title: str | None = None
+    company: str | None = None
+    source_url: str | None = None
+    source_domain: str | None = None
+    jd_text: str
+    inspected_urls: list[str] = Field(default_factory=list)
+    from_cache: bool = False

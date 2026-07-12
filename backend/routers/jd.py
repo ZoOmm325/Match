@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, Protocol
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -10,8 +11,14 @@ from backend.schemas.jd import (
     ExtractedSkillSummaryResponse,
     JdDetailResponse,
     JdExtractionStoredData,
+    JdFetchRequest,
+    JdFetchResponse,
     JdListItemResponse,
     JdListResponse,
+    JdTrendPointResponse,
+    JdTrendResponse,
+    JobMarketTrendPointResponse,
+    JobMarketTrendResponse,
 )
 from backend.schemas.jd_extraction import (
     ApiResponse,
@@ -20,6 +27,7 @@ from backend.schemas.jd_extraction import (
 )
 from backend.services.jd_service import ExtractedSkillResult, JdExtractionResult, JdService
 from backend.services.jd_skill_extractor import JdSkillExtractor
+from backend.services.job_fetcher import PublicJdFetchError, PublicJobFetcher
 
 router = APIRouter(prefix="/jd", tags=["JD"])
 extractor = JdSkillExtractor()
@@ -29,6 +37,10 @@ class JdReadRepository(Protocol):
     async def get_jd_detail(self, jd_id: int) -> JdDetailResponse | None: ...
 
     async def list_jds(self, *, limit: int, offset: int) -> JdListResponse: ...
+
+    async def get_jd_trend(self, *, days: int) -> JdTrendResponse: ...
+
+    async def get_job_market_trend(self, *, keyword: str, years: int) -> JobMarketTrendResponse: ...
 
     async def delete_jd(self, jd_id: int) -> bool: ...
 
@@ -89,6 +101,69 @@ class SqlAlchemyJdReadRepository:
             offset=offset,
         )
 
+    async def get_jd_trend(self, *, days: int) -> JdTrendResponse:
+        from sqlalchemy import func, select
+
+        from backend.models.jd import Jd
+
+        end_date = datetime.now(UTC).date()
+        start_date = end_date - timedelta(days=days - 1)
+        start_datetime = datetime.combine(start_date, time.min, tzinfo=UTC)
+
+        result = await self.session.execute(
+            select(func.date(Jd.created_at), func.count())
+            .where(Jd.created_at >= start_datetime)
+            .group_by(func.date(Jd.created_at))
+            .order_by(func.date(Jd.created_at))
+        )
+        counts_by_date = {_coerce_date(bucket): int(count) for bucket, count in result.all()}
+        points = [
+            JdTrendPointResponse(
+                date=(start_date + timedelta(days=index)).isoformat(),
+                count=counts_by_date.get(start_date + timedelta(days=index), 0),
+            )
+            for index in range(days)
+        ]
+        return JdTrendResponse(
+            days=days,
+            total=sum(point.count for point in points),
+            points=points,
+        )
+
+    async def get_job_market_trend(self, *, keyword: str, years: int) -> JobMarketTrendResponse:
+        from sqlalchemy import extract, func, or_, select
+
+        from backend.models.jd import Jd
+
+        normalized_keyword = keyword.strip()
+        end_year = datetime.now(UTC).year
+        start_year = end_year - years + 1
+        start_datetime = datetime(start_year, 1, 1, tzinfo=UTC)
+        pattern = f"%{normalized_keyword}%"
+        year_bucket = extract("year", Jd.created_at)
+
+        result = await self.session.execute(
+            select(year_bucket, func.count())
+            .where(Jd.created_at >= start_datetime)
+            .where(or_(Jd.title.ilike(pattern), Jd.raw_text.ilike(pattern)))
+            .group_by(year_bucket)
+            .order_by(year_bucket)
+        )
+        counts_by_year = {int(year): int(count) for year, count in result.all()}
+        points = [
+            JobMarketTrendPointResponse(
+                year=start_year + index,
+                count=counts_by_year.get(start_year + index, 0),
+            )
+            for index in range(years)
+        ]
+        return JobMarketTrendResponse(
+            keyword=normalized_keyword,
+            years=years,
+            total=sum(point.count for point in points),
+            points=points,
+        )
+
     async def delete_jd(self, jd_id: int) -> bool:
         from sqlalchemy import delete
 
@@ -140,6 +215,10 @@ def get_jd_read_repository(session: Any = Depends(get_session)) -> JdReadReposit
     return SqlAlchemyJdReadRepository(session)
 
 
+def get_public_job_fetcher() -> PublicJobFetcher:
+    return PublicJobFetcher()
+
+
 def build_extraction_response(
     payload: JdSkillExtractionRequest,
 ) -> ApiResponse[JdSkillExtractionData]:
@@ -185,6 +264,14 @@ def _skill_result_to_response(skill: ExtractedSkillResult) -> ExtractedSkillSumm
     )
 
 
+def _coerce_date(value: Any) -> date:
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    return date.fromisoformat(str(value)[:10])
+
+
 @router.post(
     "/extract",
     response_model=ApiResponse[JdExtractionStoredData],
@@ -206,6 +293,24 @@ async def extract_jd_skills(
 
 
 @router.post(
+    "/fetch",
+    response_model=ApiResponse[JdFetchResponse],
+    summary="Fetch a public job description by keyword or URL",
+)
+async def fetch_public_jd(
+    payload: JdFetchRequest,
+    fetcher: PublicJobFetcher = Depends(get_public_job_fetcher),
+) -> ApiResponse[JdFetchResponse]:
+    try:
+        data = await fetcher.fetch(payload)
+    except PublicJdFetchError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return ApiResponse(code=0, message="success", data=data)
+
+
+@router.post(
     "/extract-skills",
     response_model=ApiResponse[JdSkillExtractionData],
     include_in_schema=False,
@@ -224,6 +329,39 @@ async def list_jds(
 ) -> ApiResponse[JdListResponse]:
     return ApiResponse(
         code=0, message="success", data=await repository.list_jds(limit=limit, offset=offset)
+    )
+
+
+@router.get(
+    "/trend",
+    response_model=ApiResponse[JdTrendResponse],
+    summary="Count submitted JDs by day",
+)
+async def get_jd_trend(
+    days: int = Query(30, ge=7, le=90),
+    repository: JdReadRepository = Depends(get_jd_read_repository),
+) -> ApiResponse[JdTrendResponse]:
+    return ApiResponse(
+        code=0,
+        message="success",
+        data=await repository.get_jd_trend(days=days),
+    )
+
+
+@router.get(
+    "/market-trend",
+    response_model=ApiResponse[JobMarketTrendResponse],
+    summary="Count matching job descriptions by year",
+)
+async def get_job_market_trend(
+    keyword: str = Query(..., min_length=2, max_length=100),
+    years: int = Query(5, ge=2, le=10),
+    repository: JdReadRepository = Depends(get_jd_read_repository),
+) -> ApiResponse[JobMarketTrendResponse]:
+    return ApiResponse(
+        code=0,
+        message="success",
+        data=await repository.get_job_market_trend(keyword=keyword, years=years),
     )
 
 

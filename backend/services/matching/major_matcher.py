@@ -9,6 +9,142 @@ from backend.services.matching._utils import aggregate_embedding
 from backend.services.vector_service import VectorSearchResult, VectorService
 
 
+CURRICULUM_SKILL_TERMS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
+    (
+        ("程序设计", "编程", "软件开发", "面向对象", "programming", "software development"),
+        ("Python", "Java", "C", "C++", "JavaScript", "Git", "Problem Solving"),
+    ),
+    (
+        ("面向对象", "object-oriented"),
+        ("Java", "C++", "C#", "Design Patterns"),
+    ),
+    (
+        ("数据库", "database"),
+        ("SQL", "MySQL", "PostgreSQL", "Database Design", "Data Modeling"),
+    ),
+    (
+        ("数据结构", "算法", "algorithm", "data structure"),
+        ("Problem Solving", "Data Modeling"),
+    ),
+    (
+        ("软件工程", "软件项目", "需求工程", "software engineering", "software project"),
+        ("Agile Development", "Scrum", "Project Management", "Git", "FastAPI", "CI/CD", "Docker"),
+    ),
+    (
+        ("软件测试", "测试技术", "software testing"),
+        ("Unit Testing", "Integration Testing", "End-to-End Testing", "Selenium", "Postman"),
+    ),
+    (
+        ("计算机网络", "网络协议", "路由", "交换", "network"),
+        ("Linux", "Nginx", "Cybersecurity"),
+    ),
+    (
+        ("操作系统", "linux"),
+        ("Linux", "Bash"),
+    ),
+    (
+        ("web 开发", "web开发", "web development", "前端"),
+        ("HTML", "CSS", "JavaScript", "React", "Vue"),
+    ),
+    (
+        ("后端", "接口", "api 开发", "api development"),
+        ("REST API", "GraphQL", "Node.js", "Java", "Python", "FastAPI", "Spring Boot"),
+    ),
+    (
+        ("机器学习", "machine learning"),
+        ("Machine Learning", "Scikit-learn", "Python", "Pandas", "NumPy"),
+    ),
+    (
+        ("深度学习", "deep learning"),
+        ("Deep Learning", "PyTorch", "TensorFlow", "Keras"),
+    ),
+    (
+        ("自然语言处理", "nlp", "natural language processing"),
+        ("NLP", "Natural Language Processing", "Transformers"),
+    ),
+    (
+        ("计算机视觉", "computer vision"),
+        ("Computer Vision", "OpenCV"),
+    ),
+    (
+        ("人工智能", "智能科学"),
+        ("Machine Learning", "Deep Learning", "Python", "Scikit-learn"),
+    ),
+    (
+        ("大数据", "数据挖掘", "数据分析", "data mining", "data analysis"),
+        ("Pandas", "NumPy", "ETL", "Data Warehouse", "Apache Spark", "Hadoop"),
+    ),
+    (
+        ("数据可视化", "visualization"),
+        ("Data Modeling", "Pandas"),
+    ),
+    (
+        ("云计算", "云平台", "cloud"),
+        ("Docker", "Kubernetes", "Cloud Native", "AWS", "Alibaba Cloud"),
+    ),
+    (
+        ("物联网", "iot"),
+        ("Internet of Things", "IoT", "Embedded Systems", "C", "C++"),
+    ),
+    (
+        ("嵌入式", "embedded"),
+        ("Embedded Systems", "C", "C++", "Linux"),
+    ),
+    (
+        ("网络安全", "信息安全", "web 安全", "安全攻防", "cybersecurity", "security"),
+        ("Cybersecurity", "Cryptography", "Linux"),
+    ),
+    (
+        ("密码", "cryptography"),
+        ("Cryptography",),
+    ),
+    (
+        ("电路", "电子", "circuit"),
+        ("Circuit Design",),
+    ),
+    (
+        ("信号处理", "signal processing"),
+        ("Signal Processing", "MATLAB"),
+    ),
+    (
+        ("plc",),
+        ("PLC",),
+    ),
+    (
+        ("cad", "机械设计", "工程制图"),
+        ("CAD", "AutoCAD", "SolidWorks"),
+    ),
+)
+
+COMPUTER_MAJOR_TRIGGERS: tuple[str, ...] = (
+    "计算机",
+    "软件工程",
+    "网络工程",
+    "信息安全",
+    "物联网",
+    "智能科学",
+    "人工智能",
+    "数据科学",
+    "大数据",
+    "网络空间安全",
+    "cybersecurity",
+    "computer",
+    "software engineering",
+    "data science",
+    "artificial intelligence",
+)
+
+COMPUTER_COMMON_SKILL_TERMS: tuple[str, ...] = (
+    "Git",
+    "Linux",
+    "SQL",
+    "REST API",
+    "Unit Testing",
+    "Docker",
+    "CI/CD",
+)
+
+
 @dataclass(frozen=True)
 class MajorMatchResult:
     major_id: int | None
@@ -122,11 +258,10 @@ class MajorMatcher:
         matched: list[str] = []
         missing: list[str] = []
         major_text = self._major_search_text(major)
+        derived_skill_terms = self._derived_skill_terms(major)
         for skill in skills:
             skill_name = skill.normalized_name or skill.name
-            if self._contains_skill_name(major_text, skill_name) or self._contains_skill_name(
-                major_text, skill.name
-            ):
+            if self._is_skill_covered(major_text, derived_skill_terms, skill):
                 matched.append(skill_name)
             else:
                 missing.append(skill_name)
@@ -150,6 +285,32 @@ class MajorMatcher:
         elif curriculum:
             parts.append(str(curriculum))
         return " ".join(parts).casefold()
+
+    def _derived_skill_terms(self, major: Any) -> set[str]:
+        source_text = self._major_search_text(major)
+        terms: set[str] = set()
+        for triggers, skill_terms in CURRICULUM_SKILL_TERMS:
+            if any(trigger.casefold() in source_text for trigger in triggers):
+                terms.update(term.casefold() for term in skill_terms)
+        if self._is_computer_major_text(source_text):
+            terms.update(term.casefold() for term in COMPUTER_COMMON_SKILL_TERMS)
+        return terms
+
+    def _is_computer_major_text(self, source_text: str) -> bool:
+        return any(trigger.casefold() in source_text for trigger in COMPUTER_MAJOR_TRIGGERS)
+
+    def _is_skill_covered(
+        self,
+        major_text: str,
+        derived_skill_terms: set[str],
+        skill: ExtractedSkillResult,
+    ) -> bool:
+        skill_names = {
+            name.strip() for name in (skill.normalized_name, skill.name) if name and name.strip()
+        }
+        if any(self._contains_skill_name(major_text, name) for name in skill_names):
+            return True
+        return any(name.casefold() in derived_skill_terms for name in skill_names)
 
     def _contains_skill_name(self, major_text: str, skill_name: str) -> bool:
         normalized_name = skill_name.strip()

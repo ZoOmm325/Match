@@ -14,13 +14,14 @@ test("package scripts expose Next.js development commands", async () => {
   assert.equal(pkg.devDependencies.tailwindcss.startsWith("^3."), true);
 });
 
-test("app router pages exist for required routes", async () => {
+test("app router pages keep one match entry point", async () => {
   const layout = await read("app/layout.tsx");
   const home = await read("app/page.tsx");
   const match = await read("app/match/page.tsx");
   const history = await read("app/history/page.tsx");
 
-  assert.match(layout, /href: "\/match"/);
+  assert.match(layout, /href: "\/", label: "开始匹配"/);
+  assert.doesNotMatch(layout, /href: "\/match"/);
   assert.match(layout, /href: "\/history"/);
   assert.match(home, /开始匹配/);
   assert.match(match, /redirect\("\/"\)/);
