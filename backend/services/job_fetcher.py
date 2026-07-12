@@ -1,18 +1,29 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, quote_plus, urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
 import httpx
 
-from backend.schemas.jd import JdFetchRequest, JdFetchResponse
+from backend.schemas.jd import (
+    JdFetchRequest,
+    JdFetchResponse,
+    JobMarketTrendPointResponse,
+    JobMarketTrendResponse,
+)
 
 USER_AGENT = "JD-Major-Match/0.1 (+https://localhost; public JD fetcher)"
 SEARCH_URL = "https://html.duckduckgo.com/html/?q={query}"
+TREND_SEARCH_URLS = (
+    "https://html.duckduckgo.com/html/?q={query}",
+    "https://www.bing.com/search?q={query}",
+)
 MAX_PAGE_BYTES = 800_000
 MIN_JD_LENGTH = 120
 MAX_JD_LENGTH = 8000
@@ -28,6 +39,95 @@ class CandidatePage:
 
 class PublicJdFetchError(RuntimeError):
     """Raised when no compliant public JD can be fetched."""
+
+
+class PublicJobTrendFetcher:
+    def __init__(self, *, timeout: float = 8.0, max_results_per_year: int = 50) -> None:
+        self.timeout = timeout
+        self.max_results_per_year = max_results_per_year
+
+    async def fetch(
+        self,
+        *,
+        keyword: str,
+        years: int,
+        source_url: str | None = None,
+    ) -> JobMarketTrendResponse:
+        normalized_keyword = keyword.strip()
+        if len(normalized_keyword) < 2:
+            raise ValueError("keyword must contain at least 2 characters")
+        normalized_source_url = source_url.strip() if source_url else None
+        if normalized_source_url and not _is_http_url(normalized_source_url):
+            raise ValueError("source_url must start with http or https")
+
+        current_year = datetime_now_year()
+        start_year = current_year - years + 1
+        points: list[JobMarketTrendPointResponse] = []
+        successful_years = 0
+        source_url_counted = False
+
+        if normalized_source_url:
+            await PublicJobFetcher(timeout=self.timeout).fetch(
+                JdFetchRequest(
+                    keyword=normalized_keyword,
+                    source_url=normalized_source_url,
+                    max_results=1,
+                )
+            )
+            source_url_counted = True
+
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            follow_redirects=True,
+            headers={"User-Agent": USER_AGENT, "Accept": "text/html"},
+        ) as client:
+            for year in range(start_year, current_year + 1):
+                count, ok = await self._count_public_results(client, normalized_keyword, year)
+                if source_url_counted and year == current_year:
+                    count += 1
+                if ok:
+                    successful_years += 1
+                points.append(JobMarketTrendPointResponse(year=year, count=count))
+
+        if successful_years == 0 and not source_url_counted:
+            raise PublicJdFetchError("public job trend search is temporarily unavailable")
+
+        return JobMarketTrendResponse(
+            keyword=normalized_keyword,
+            years=years,
+            total=sum(point.count for point in points),
+            source_url=normalized_source_url,
+            points=points,
+        )
+
+    async def _count_public_results(
+        self,
+        client: httpx.AsyncClient,
+        keyword: str,
+        year: int,
+    ) -> tuple[int, bool]:
+        query = f"{keyword} 招聘 JD 岗位职责 任职要求 {year}"
+        for search_template in TREND_SEARCH_URLS:
+            search_url = search_template.format(query=quote_plus(query))
+            try:
+                response = await client.get(search_url)
+                response.raise_for_status()
+            except httpx.HTTPError:
+                continue
+            if response.status_code == 202:
+                continue
+
+            parser = _TextExtractor()
+            parser.feed(response.text[:MAX_PAGE_BYTES])
+            candidates = _dedupe_candidates(
+                CandidatePage(url=_normalize_search_url(link.url), title=link.title)
+                for link in parser.links
+            )
+            candidates = [
+                candidate for candidate in candidates if _is_public_result_url(candidate.url)
+            ]
+            return min(len(candidates), self.max_results_per_year), True
+        return 0, False
 
 
 class _TextExtractor(HTMLParser):
@@ -239,7 +339,34 @@ def _normalize_search_url(url: str) -> str:
     if parsed.netloc.endswith("duckduckgo.com") and parsed.path.startswith("/l/"):
         target = parse_qs(parsed.query).get("uddg", [url])[0]
         return target
+    if parsed.netloc.endswith("bing.com") and parsed.path.startswith("/ck/"):
+        target = _decode_bing_target(parsed.query)
+        if target:
+            return target
     return url
+
+
+def _decode_bing_target(query: str) -> str | None:
+    encoded = parse_qs(query).get("u", [None])[0]
+    if not encoded:
+        return None
+    if encoded.startswith("a1"):
+        encoded = encoded[2:]
+    padding = "=" * (-len(encoded) % 4)
+    try:
+        decoded = base64.urlsafe_b64decode(f"{encoded}{padding}").decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return None
+    return decoded if _is_http_url(decoded) else None
+
+
+def _is_public_result_url(url: str) -> bool:
+    parsed = urlparse(url)
+    host = parsed.netloc.lower()
+    if not host:
+        return False
+    blocked_hosts = ("bing.com", "microsoft.com", "duckduckgo.com")
+    return not any(host == blocked or host.endswith(f".{blocked}") for blocked in blocked_hosts)
 
 
 def _dedupe_candidates(candidates: object) -> list[CandidatePage]:
@@ -253,3 +380,7 @@ def _dedupe_candidates(candidates: object) -> list[CandidatePage]:
         seen.add(candidate.url)
         deduped.append(candidate)
     return deduped
+
+
+def datetime_now_year() -> int:
+    return datetime.now(UTC).year

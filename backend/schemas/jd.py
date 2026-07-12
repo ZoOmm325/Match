@@ -103,7 +103,8 @@ class JobMarketTrendResponse(BaseModel):
     keyword: str
     years: int
     total: int
-    data_source: str = "local_jd_records"
+    data_source: str = "public_web_search"
+    source_url: str | None = None
     points: list[JobMarketTrendPointResponse]
 
 

@@ -134,6 +134,7 @@ export interface JobMarketTrendData {
   years: number;
   total: number;
   data_source: string;
+  source_url: string | null;
   points: JobMarketTrendPoint[];
 }
 
@@ -257,9 +258,13 @@ export async function getJdTrend(days = 30): Promise<JdTrendData> {
   return apiRequest<JdTrendData>(withQuery("/jd/trend", { days }), {}, isJdTrendData);
 }
 
-export async function getJobMarketTrend(keyword: string, years = 5): Promise<JobMarketTrendData> {
+export async function getJobMarketTrend(
+  keyword: string,
+  years = 5,
+  sourceUrl?: string
+): Promise<JobMarketTrendData> {
   return apiRequest<JobMarketTrendData>(
-    withQuery("/jd/market-trend", { keyword, years }),
+    withQuery("/jd/market-trend", { keyword, years, source_url: sourceUrl }),
     {},
     isJobMarketTrendData
   );
@@ -508,6 +513,7 @@ function isJobMarketTrendData(value: unknown): value is JobMarketTrendData {
     typeof value.years === "number" &&
     typeof value.total === "number" &&
     typeof value.data_source === "string" &&
+    (value.source_url === null || typeof value.source_url === "string") &&
     Array.isArray(value.points) &&
     value.points.every(isJobMarketTrendPoint)
   );

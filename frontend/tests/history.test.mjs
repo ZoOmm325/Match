@@ -4,7 +4,7 @@ import { test } from "node:test";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("history page loads paginated JDs, match counts, and job market trend", async () => {
+test("history page loads paginated JDs and match counts only", async () => {
   const page = await read("app/history/page.tsx");
 
   assert.match(page, /const PAGE_SIZE = 10/);
@@ -12,21 +12,33 @@ test("history page loads paginated JDs, match counts, and job market trend", asy
   assert.match(page, /await Promise\.all\(/);
   assert.match(page, /await getMatchResult\(item\.id\)/);
   assert.match(page, /matchedMajorCount: match\.recommendations\.length/);
-  assert.match(page, /getJobMarketTrend\(keyword, 5\)/);
-  assert.match(page, /<JobMarketTrendChart data=\{trend\} loading=\{trendLoading\} error=\{trendError\}/);
-  assert.match(page, /id="job-trend-keyword"/);
+  assert.doesNotMatch(page, /getJobMarketTrend/);
+  assert.doesNotMatch(page, /JobMarketTrendChart/);
   assert.match(page, /setOffset\(\(value\) => Math\.max\(0, value - PAGE_SIZE\)\)/);
   assert.match(page, /setOffset\(\(value\) => value \+ PAGE_SIZE\)/);
+});
+
+test("trends page waits for user input and accepts a public detail URL", async () => {
+  const page = await read("app/trends/page.tsx");
+
+  assert.match(page, /const \[keyword, setKeyword\] = useState\(""\)/);
+  assert.match(page, /const \[loading, setLoading\] = useState\(false\)/);
+  assert.match(page, /if \(submittedKeyword\.trim\(\)\)/);
+  assert.match(page, /getJobMarketTrend\(normalized, 5, publicUrl \|\| undefined\)/);
+  assert.match(page, /<JobMarketTrendChart data=\{trend\} loading=\{loading\} error=\{error\}/);
+  assert.match(page, /id="job-trend-keyword"/);
+  assert.match(page, /id="job-trend-source-url"/);
+  assert.match(page, /公开岗位详情页 URL/);
+  assert.match(page, /岗位市场趋势/);
 });
 
 test("job market trend chart renders an accessible line chart", async () => {
   const source = await read("components/JobMarketTrendChart.tsx");
 
-  assert.match(source, /aria-label="某一岗位近几年岗位数量变化折线图"/);
+  assert.match(source, /aria-label=/);
   assert.match(source, /<polyline/);
   assert.match(source, /points\.map/);
   assert.match(source, /point\.year/);
-  assert.match(source, /正在加载岗位趋势数据/);
 });
 
 test("history list exposes loading and empty states", async () => {

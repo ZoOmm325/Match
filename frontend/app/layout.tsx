@@ -11,6 +11,7 @@ export const metadata: Metadata = {
 
 const navItems = [
   { href: "/", label: "开始匹配" },
+  { href: "/trends", label: "岗位趋势" },
   { href: "/history", label: "历史记录" },
   { href: "/majors", label: "专业浏览" },
 ];
@@ -36,7 +37,7 @@ export default function RootLayout({
                   </Link>
                   <nav
                     aria-label="主导航"
-                    className="-mx-1 grid grid-cols-3 gap-1 overflow-x-auto px-1 sm:mx-0 sm:flex sm:w-auto sm:px-0"
+                    className="-mx-1 grid grid-cols-4 gap-1 overflow-x-auto px-1 sm:mx-0 sm:flex sm:w-auto sm:px-0"
                   >
                     {navItems.map((item) => (
                       <Link

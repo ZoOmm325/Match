@@ -14,18 +14,21 @@ test("package scripts expose Next.js development commands", async () => {
   assert.equal(pkg.devDependencies.tailwindcss.startsWith("^3."), true);
 });
 
-test("app router pages keep one match entry point", async () => {
+test("app router pages keep one match entry point and expose trend page", async () => {
   const layout = await read("app/layout.tsx");
   const home = await read("app/page.tsx");
   const match = await read("app/match/page.tsx");
   const history = await read("app/history/page.tsx");
+  const trends = await read("app/trends/page.tsx");
 
   assert.match(layout, /href: "\/", label: "开始匹配"/);
+  assert.match(layout, /href: "\/trends", label: "岗位趋势"/);
   assert.doesNotMatch(layout, /href: "\/match"/);
   assert.match(layout, /href: "\/history"/);
-  assert.match(home, /开始匹配/);
+  assert.match(home, /submitJD/);
   assert.match(match, /redirect\("\/"\)/);
   assert.match(history, /历史匹配记录/);
+  assert.match(trends, /岗位市场趋势/);
 });
 
 test("tailwind is wired into the app", async () => {

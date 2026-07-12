@@ -3,7 +3,12 @@ from datetime import datetime, timezone
 from starlette.testclient import TestClient
 
 from backend.main import app
-from backend.routers.jd import get_jd_read_repository, get_jd_service, get_public_job_fetcher
+from backend.routers.jd import (
+    get_jd_read_repository,
+    get_jd_service,
+    get_public_job_fetcher,
+    get_public_job_trend_fetcher,
+)
 from backend.schemas.jd import (
     ExtractedJdSkillResponse,
     JdFetchResponse,
@@ -113,23 +118,34 @@ class FakeJdReadRepository:
             ],
         )
 
-    async def get_job_market_trend(self, *, keyword, years):
-        return JobMarketTrendResponse(
-            keyword=keyword,
-            years=years,
-            total=3,
-            points=[
-                JobMarketTrendPointResponse(year=2022, count=0),
-                JobMarketTrendPointResponse(year=2023, count=1),
-                JobMarketTrendPointResponse(year=2024, count=2),
-            ],
-        )
 
     async def delete_jd(self, jd_id):
         if jd_id != self.detail.id:
             return False
         self.deleted.append(jd_id)
         return True
+
+
+class FakePublicJobTrendFetcher:
+    def __init__(self, *, fail=False):
+        self.fail = fail
+        self.calls = []
+
+    async def fetch(self, *, keyword, years, source_url=None):
+        self.calls.append({"keyword": keyword, "years": years, "source_url": source_url})
+        if self.fail:
+            raise PublicJdFetchError("public job trend search is temporarily unavailable")
+        return JobMarketTrendResponse(
+            keyword=keyword,
+            years=years,
+            total=3,
+            source_url=source_url,
+            points=[
+                JobMarketTrendPointResponse(year=2022, count=0),
+                JobMarketTrendPointResponse(year=2023, count=1),
+                JobMarketTrendPointResponse(year=2024, count=2),
+            ],
+        )
 
 
 class FakePublicJobFetcher:
@@ -308,10 +324,12 @@ def test_get_jd_trend_api_returns_daily_counts():
 
 
 def test_get_job_market_trend_api_returns_yearly_keyword_counts():
-    repository = FakeJdReadRepository()
-    app.dependency_overrides[get_jd_read_repository] = lambda: repository
+    fetcher = FakePublicJobTrendFetcher()
+    app.dependency_overrides[get_public_job_trend_fetcher] = lambda: fetcher
 
-    response = client.get("/api/jd/market-trend?keyword=Backend%20Engineer&years=3")
+    response = client.get(
+        "/api/jd/market-trend?keyword=Backend%20Engineer&years=3&source_url=https%3A%2F%2Fexample.com%2Fjobs%2F1"
+    )
 
     body = response.json()
 
@@ -319,8 +337,27 @@ def test_get_job_market_trend_api_returns_yearly_keyword_counts():
     assert body["data"]["keyword"] == "Backend Engineer"
     assert body["data"]["years"] == 3
     assert body["data"]["total"] == 3
-    assert body["data"]["data_source"] == "local_jd_records"
+    assert body["data"]["data_source"] == "public_web_search"
+    assert body["data"]["source_url"] == "https://example.com/jobs/1"
     assert body["data"]["points"][-1] == {"year": 2024, "count": 2}
+    assert fetcher.calls == [
+        {
+            "keyword": "Backend Engineer",
+            "years": 3,
+            "source_url": "https://example.com/jobs/1",
+        }
+    ]
+
+
+def test_get_job_market_trend_api_returns_503_when_public_search_unavailable():
+    app.dependency_overrides[get_public_job_trend_fetcher] = lambda: FakePublicJobTrendFetcher(
+        fail=True
+    )
+
+    response = client.get("/api/jd/market-trend?keyword=Backend%20Engineer&years=3")
+
+    assert response.status_code == 503
+    assert response.json()["message"] == "public job trend search is temporarily unavailable"
 
 
 def test_delete_jd_api_deletes_existing_jd():

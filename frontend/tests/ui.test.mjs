@@ -57,7 +57,8 @@ test("global layout mounts shared feedback and responsive shell", async () => {
   assert.match(layout, /<ToastProvider>/);
   assert.match(layout, /<ErrorBoundary>/);
   assert.match(layout, /<footer/);
-  assert.match(layout, /grid grid-cols-3/);
+  assert.match(layout, /grid grid-cols-4/);
+  assert.match(layout, /href: "\/trends", label: "岗位趋势"/);
   assert.match(styles, /min-width: 320px/);
   assert.match(styles, /prefers-reduced-motion: reduce/);
   assert.match(styles, /--page-header-height/);

@@ -21,7 +21,6 @@ from backend.schemas.jd import (
     JdListResponse,
     JdTrendPointResponse,
     JdTrendResponse,
-    JobMarketTrendPointResponse,
     JobMarketTrendResponse,
 )
 from backend.schemas.major import MajorListResponse, MajorResponse
@@ -193,19 +192,28 @@ class FakeJdRepository:
             points=[JdTrendPointResponse(date=NOW.date().isoformat(), count=1)],
         )
 
-    async def get_job_market_trend(self, *, keyword: str, years: int) -> JobMarketTrendResponse:
-        return JobMarketTrendResponse(
-            keyword=keyword,
-            years=years,
-            total=1,
-            points=[JobMarketTrendPointResponse(year=NOW.year, count=1)],
-        )
-
     async def delete_jd(self, jd_id: int) -> bool:
         if jd_id != 42 or jd_id in self.state.deleted_jds:
             return False
         self.state.deleted_jds.add(jd_id)
         return True
+
+
+class FakePublicJobTrendFetcher:
+    async def fetch(
+        self,
+        *,
+        keyword: str,
+        years: int,
+        source_url: str | None = None,
+    ) -> JobMarketTrendResponse:
+        return JobMarketTrendResponse(
+            keyword=keyword,
+            years=years,
+            total=1,
+            source_url=source_url,
+            points=[{"year": NOW.year, "count": 1}],
+        )
 
 
 class FakeSkillRepository:
@@ -387,6 +395,7 @@ def api_app(api_state: ApiState) -> FastAPI:
         {
             jd_router.get_jd_service: lambda: FakeJdService(api_state),
             jd_router.get_jd_read_repository: lambda: jd_repository,
+            jd_router.get_public_job_trend_fetcher: FakePublicJobTrendFetcher,
             skill_router.get_skill_repository: FakeSkillRepository,
             major_router.get_major_repository: FakeMajorRepository,
             major_router.get_embedding_service: FakeEmbeddingService,
@@ -417,7 +426,11 @@ SUCCESS_CASES = [
     ("POST", "/api/jd/extract-skills", {"jd_text": VALID_JD}),
     ("GET", "/api/jd?limit=20&offset=0", None),
     ("GET", "/api/jd/trend?days=30", None),
-    ("GET", "/api/jd/market-trend?keyword=Backend%20Engineer&years=5", None),
+    (
+        "GET",
+        "/api/jd/market-trend?keyword=Backend%20Engineer&years=5&source_url=https%3A%2F%2Fexample.com%2Fjobs%2F1",
+        None,
+    ),
     ("GET", "/api/jd/42", None),
     ("DELETE", "/api/jd/42", None),
     ("GET", "/api/skills", None),
@@ -703,7 +716,6 @@ async def test_sqlalchemy_api_read_repositories_execute_real_crud(db_session):
 
     jd_list = await jd_repository.list_jds(limit=10, offset=0)
     jd_trend = await jd_repository.get_jd_trend(days=7)
-    market_trend = await jd_repository.get_job_market_trend(keyword="Backend Engineer", years=5)
     jd_detail = await jd_repository.get_jd_detail(jd.id)
     skill_list = await skill_repository.list_skills(
         category="programming_language",
@@ -726,10 +738,6 @@ async def test_sqlalchemy_api_read_repositories_execute_real_crud(db_session):
     assert jd_trend.days == 7
     assert jd_trend.total == 1
     assert jd_trend.points[-1].count == 1
-    assert market_trend.keyword == "Backend Engineer"
-    assert market_trend.years == 5
-    assert market_trend.total == 1
-    assert market_trend.points[-1].count == 1
     assert jd_detail is not None
     assert jd_detail.skills[0].normalized_name == "Python"
     assert skill_list.total == 1

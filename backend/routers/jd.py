@@ -17,7 +17,6 @@ from backend.schemas.jd import (
     JdListResponse,
     JdTrendPointResponse,
     JdTrendResponse,
-    JobMarketTrendPointResponse,
     JobMarketTrendResponse,
 )
 from backend.schemas.jd_extraction import (
@@ -27,7 +26,7 @@ from backend.schemas.jd_extraction import (
 )
 from backend.services.jd_service import ExtractedSkillResult, JdExtractionResult, JdService
 from backend.services.jd_skill_extractor import JdSkillExtractor
-from backend.services.job_fetcher import PublicJdFetchError, PublicJobFetcher
+from backend.services.job_fetcher import PublicJdFetchError, PublicJobFetcher, PublicJobTrendFetcher
 
 router = APIRouter(prefix="/jd", tags=["JD"])
 extractor = JdSkillExtractor()
@@ -39,8 +38,6 @@ class JdReadRepository(Protocol):
     async def list_jds(self, *, limit: int, offset: int) -> JdListResponse: ...
 
     async def get_jd_trend(self, *, days: int) -> JdTrendResponse: ...
-
-    async def get_job_market_trend(self, *, keyword: str, years: int) -> JobMarketTrendResponse: ...
 
     async def delete_jd(self, jd_id: int) -> bool: ...
 
@@ -130,40 +127,6 @@ class SqlAlchemyJdReadRepository:
             points=points,
         )
 
-    async def get_job_market_trend(self, *, keyword: str, years: int) -> JobMarketTrendResponse:
-        from sqlalchemy import extract, func, or_, select
-
-        from backend.models.jd import Jd
-
-        normalized_keyword = keyword.strip()
-        end_year = datetime.now(UTC).year
-        start_year = end_year - years + 1
-        start_datetime = datetime(start_year, 1, 1, tzinfo=UTC)
-        pattern = f"%{normalized_keyword}%"
-        year_bucket = extract("year", Jd.created_at)
-
-        result = await self.session.execute(
-            select(year_bucket, func.count())
-            .where(Jd.created_at >= start_datetime)
-            .where(or_(Jd.title.ilike(pattern), Jd.raw_text.ilike(pattern)))
-            .group_by(year_bucket)
-            .order_by(year_bucket)
-        )
-        counts_by_year = {int(year): int(count) for year, count in result.all()}
-        points = [
-            JobMarketTrendPointResponse(
-                year=start_year + index,
-                count=counts_by_year.get(start_year + index, 0),
-            )
-            for index in range(years)
-        ]
-        return JobMarketTrendResponse(
-            keyword=normalized_keyword,
-            years=years,
-            total=sum(point.count for point in points),
-            points=points,
-        )
-
     async def delete_jd(self, jd_id: int) -> bool:
         from sqlalchemy import delete
 
@@ -217,6 +180,10 @@ def get_jd_read_repository(session: Any = Depends(get_session)) -> JdReadReposit
 
 def get_public_job_fetcher() -> PublicJobFetcher:
     return PublicJobFetcher()
+
+
+def get_public_job_trend_fetcher() -> PublicJobTrendFetcher:
+    return PublicJobTrendFetcher()
 
 
 def build_extraction_response(
@@ -356,13 +323,16 @@ async def get_jd_trend(
 async def get_job_market_trend(
     keyword: str = Query(..., min_length=2, max_length=100),
     years: int = Query(5, ge=2, le=10),
-    repository: JdReadRepository = Depends(get_jd_read_repository),
+    source_url: str | None = Query(None, max_length=2000),
+    fetcher: PublicJobTrendFetcher = Depends(get_public_job_trend_fetcher),
 ) -> ApiResponse[JobMarketTrendResponse]:
-    return ApiResponse(
-        code=0,
-        message="success",
-        data=await repository.get_job_market_trend(keyword=keyword, years=years),
-    )
+    try:
+        data = await fetcher.fetch(keyword=keyword, years=years, source_url=source_url)
+    except PublicJdFetchError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return ApiResponse(code=0, message="success", data=data)
 
 
 @router.get("/{jd_id}", response_model=ApiResponse[JdDetailResponse], summary="Get JD details")
